@@ -1,0 +1,18 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="CitrineLauncher.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <!-- Improvement #20: defined once here instead of copy-pasted in every AXAML file -->
+        <LinearGradientBrush x:Key="CitrineBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Offset="0.0" Color="#E2B007"/>
+            <GradientStop Offset="1.0" Color="#9ACD32"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="CitrineHover">#FFD700</SolidColorBrush>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme/>
+    </Application.Styles>
+</Application>

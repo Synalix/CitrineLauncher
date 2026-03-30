@@ -1,0 +1,186 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:handlers="clr-namespace:CitrineLauncher.Handlers"
+        x:Class="CitrineLauncher.MainWindow"
+        Title="Citrine Launcher" Width="1000" Height="600"
+        WindowStartupLocation="CenterScreen"
+        Background="#121212" Foreground="White"
+        FontFamily="Segoe UI, Inter, sans-serif"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="30">
+
+    <Window.Styles>
+        <Style Selector="Button.window-button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.window-button:pointerover">
+            <Setter Property="Background" Value="#3A3A3A"/>
+        </Style>
+        <Style Selector="Button.window-button.close:pointerover">
+            <Setter Property="Background" Value="#C42B1C"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid ColumnDefinitions="70, *" RowDefinitions="Auto, *, Auto"
+          Margin="{Binding $parent[Window].OffScreenMargin}">
+
+        <!-- Sidebar (spans all rows) -->
+        <Border Grid.RowSpan="3" Background="#1A1A1A" BorderBrush="#252525" BorderThickness="0,0,1,0">
+            <StackPanel Margin="0,20" Spacing="4" HorizontalAlignment="Center">
+
+                <!-- Folder button -->
+                <Button x:Name="btnFolder" ToolTip.Tip="Open Launcher Folder"
+                        Background="Transparent" Width="50" Height="50" CornerRadius="10">
+                    <Path Data="M2,6 L2,18 Q2,20 4,20 L20,20 Q22,20 22,18 L22,9 Q22,7 20,7 L11,7 L9,5 Q8.5,4 7.5,4 L4,4 Q2,4 2,6 Z"
+                          Fill="#AAAAAA" Stretch="Uniform" Width="20" Height="20"/>
+                </Button>
+
+                <!-- Settings button -->
+                <Button x:Name="btnSettings" ToolTip.Tip="Settings"
+                        Background="Transparent" Width="50" Height="50" CornerRadius="10">
+                    <Path Data="M12,15.5 A3.5,3.5 0 0 1 8.5,12 A3.5,3.5 0 0 1 12,8.5 A3.5,3.5 0 0 1 15.5,12 A3.5,3.5 0 0 1 12,15.5 Z M19.43,12.97 C19.47,12.65 19.5,12.33 19.5,12 C19.5,11.67 19.47,11.34 19.43,11 L21.54,9.37 C21.73,9.22 21.78,8.95 21.66,8.73 L19.66,5.27 C19.54,5.05 19.27,4.97 19.05,5.05 L16.56,6.05 C16.04,5.65 15.48,5.32 14.87,5.07 L14.49,2.42 C14.46,2.18 14.25,2 14,2 L10,2 C9.75,2 9.54,2.18 9.51,2.42 L9.13,5.07 C8.52,5.32 7.96,5.66 7.44,6.05 L4.95,5.05 C4.72,4.96 4.46,5.05 4.34,5.27 L2.34,8.73 C2.21,8.95 2.27,9.22 2.46,9.37 L4.57,11 C4.53,11.34 4.5,11.67 4.5,12 C4.5,12.33 4.53,12.65 4.57,13 L2.46,14.63 C2.27,14.78 2.21,15.05 2.34,15.27 L4.34,18.73 C4.46,18.95 4.73,19.03 4.95,18.95 L7.44,17.95 C7.96,18.35 8.52,18.68 9.13,18.93 L9.51,21.58 C9.54,21.82 9.75,22 10,22 L14,22 C14.25,22 14.46,21.82 14.49,21.58 L14.87,18.93 C15.48,18.68 16.04,18.34 16.56,17.95 L19.05,18.95 C19.28,19.04 19.54,18.95 19.66,18.73 L21.66,15.27 C21.78,15.05 21.73,14.78 21.54,14.63 Z"
+                          Fill="#AAAAAA" Stretch="Uniform" Width="20" Height="20"/>
+                </Button>
+
+                <!-- Skins button -->
+                <Button x:Name="btnSkins" ToolTip.Tip="Skins"
+                        Background="Transparent" Width="50" Height="50" CornerRadius="10">
+                    <Path Data="M12,12 A4,4 0 1 0 12,4 A4,4 0 0 0 12,12 Z M12,14 C7.58,14 4,16.24 4,19 L4,20 L20,20 L20,19 C20,16.24 16.42,14 12,14 Z"
+                          Fill="#AAAAAA" Stretch="Uniform" Width="20" Height="20"/>
+                </Button>
+
+                <!-- Update button -->
+                <Button x:Name="btnUpdate" ToolTip.Tip="Update Launcher"
+                        Background="Transparent" Width="50" Height="50" CornerRadius="10">
+                    <Path Data="M12,5 L12,1 L7,6 L12,11 L12,7 A8,8 0 0 1 20,15 A8,8 0 0 1 12,23 A8,8 0 0 1 4,15 L2,15 A10,10 0 0 0 12,25 A10,10 0 0 0 22,15 A10,10 0 0 0 12,5 Z"
+                          Fill="#AAAAAA" Stretch="Uniform" Width="20" Height="20"/>
+                </Button>
+
+            </StackPanel>
+        </Border>
+
+        <!-- Custom Title Bar (Row 0) -->
+        <Grid Grid.Column="1" Grid.Row="0" Background="#1A1A1A" Height="30" x:Name="TitleBar">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock x:Name="TitleText"
+                       Text="citrine launcher"
+                       Margin="15,0"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       FontWeight="Medium"
+                       LetterSpacing="0.5"
+                       Foreground="{StaticResource CitrineBrush}"/>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="0,0,10,0">
+                <Button x:Name="MinimizeButton" Classes="window-button" Width="30" Height="30" Padding="0">
+                    <Path Data="M0,4 L14,4"
+                          Stroke="White" StrokeThickness="1.5" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Width="14" Height="8" Margin="0"/>
+                </Button>
+
+                <Button x:Name="MaximizeButton" Classes="window-button" Width="30" Height="30" Padding="0">
+                    <Path x:Name="MaximizePath"
+                          Data="M0,0 L12,0 L12,12 L0,12 Z"
+                          Stroke="White" StrokeThickness="1.5" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Width="14" Height="14" Margin="0"/>
+                </Button>
+
+                <Button x:Name="CloseButton" Classes="window-button close" Width="30" Height="30" Padding="0">
+                    <Path Data="M0,0 L14,14 M14,0 L0,14"
+                          Stroke="White" StrokeThickness="1.5" Stretch="None"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Width="14" Height="14" Margin="0"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Main Content (Row 1) -->
+        <Panel Grid.Column="1" Grid.Row="1" x:Name="CenterPanel">
+            <Canvas x:Name="ParticleCanvas" Background="Transparent"/>
+
+            <Button x:Name="ToggleParticlesButton"
+                    Width="32" Height="32"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="20"
+                    Background="#1A1A1A" BorderThickness="0"
+                    CornerRadius="16"
+                    ToolTip.Tip="Toggle particle effect">
+                <Path Data="M12,2L15,9H22L16,14L19,21L12,17L5,21L8,14L2,9H9L12,2Z"
+                      Fill="{StaticResource CitrineBrush}"
+                      Stretch="Uniform"
+                      Width="18" Height="18"
+                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Button>
+
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="CITRINE" FontSize="80" FontWeight="Black" LetterSpacing="10"
+                           Foreground="{StaticResource CitrineBrush}" Opacity="0.9"/>
+                <TextBlock Text="PREMIUM MINECRAFT LAUNCHER" FontSize="12" HorizontalAlignment="Center"
+                           LetterSpacing="4" Opacity="0.5"/>
+            </StackPanel>
+        </Panel>
+
+        <!-- Bottom Bar (Row 2) -->
+        <Border Grid.Column="1" Grid.Row="2" Background="#1E1E1E" Height="100" CornerRadius="20,0,0,0">
+            <Grid ColumnDefinitions="*, Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="30,0">
+                    <TextBlock x:Name="lblStatus" Text="Ready to Play" FontSize="14" Margin="0,0,0,8" FontWeight="Medium"/>
+                    <ProgressBar x:Name="pbDownload" Height="6" Background="#2A2A2A"
+                                 Foreground="{StaticResource CitrineBrush}" CornerRadius="3"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="15" Margin="0,0,30,0">
+                    <ComboBox x:Name="cbVersions" Width="140" VerticalAlignment="Center" CornerRadius="5"/>
+
+                    <ComboBox x:Name="accountCombo"
+                              Width="140"
+                              VerticalAlignment="Center"
+                              CornerRadius="5"
+                              PlaceholderText="Select account"
+                              Background="#252525"
+                              BorderThickness="0">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="handlers:Account">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="{Binding Username}"/>
+                                    <TextBlock Text="(" Foreground="Gray"/>
+                                    <TextBlock Text="{Binding Type}" Foreground="{StaticResource CitrineBrush}"/>
+                                    <TextBlock Text=")" Foreground="Gray"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <Button x:Name="addAccountButton"
+                            Content="+"
+                            Width="30" Height="30"
+                            Background="{StaticResource CitrineBrush}"
+                            Foreground="Black"
+                            FontWeight="Bold"
+                            CornerRadius="5"
+                            ToolTip.Tip="Add account"/>
+
+                    <Button x:Name="btnLaunch" Content="PLAY"
+                            Background="{StaticResource CitrineBrush}" Foreground="Black"
+                            Width="160" Height="50" FontWeight="Bold" FontSize="18"
+                            CornerRadius="8"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CitrineLauncher.OfflineAccountDialog"
+        Title="Add Offline Account"
+        Width="380" Height="200"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="White"
+        CanResize="False">
+
+    <Grid Margin="20" RowDefinitions="Auto, *, Auto">
+        <TextBlock Text="Add Offline Account" FontSize="15" FontWeight="Bold"
+                   Foreground="{StaticResource CitrineBrush}"/>
+
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="6">
+            <TextBox x:Name="UsernameInput"
+                     Watermark="Username (3–16 chars)"
+                     Background="#2A2A2A"
+                     BorderBrush="#333"
+                     Padding="10"/>
+            <!-- Bug fix #18: error text shown on invalid input -->
+            <TextBlock x:Name="ErrorText"
+                       Foreground="#FF6B6B"
+                       FontSize="11"
+                       IsVisible="False"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" Width="80" Height="32"
+                    Click="CancelButton_Click" Background="#2A2A2A" Foreground="White"
+                    CornerRadius="6"/>
+            <Button Content="Add" Width="80" Height="32"
+                    Click="AddButton_Click"
+                    Background="{StaticResource CitrineBrush}" Foreground="Black"
+                    FontWeight="Bold" CornerRadius="6"/>
+        </StackPanel>
+    </Grid>
+</Window>
