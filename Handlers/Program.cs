@@ -1,6 +1,6 @@
 using System;
 using Avalonia;
-using Avalonia.Threading;
+using Avalonia.WebView.Desktop;
 
 namespace CitrineLauncher
 {
@@ -25,6 +25,7 @@ namespace CitrineLauncher
             => AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithInterFont()
-                .LogToTrace();
+                .LogToTrace()
+                .UseDesktopWebView();
     }
 }
