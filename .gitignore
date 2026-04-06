@@ -1,8 +1,6 @@
 
 bin/
 obj/
-skills/
-docs/
 
 
 *.user
@@ -39,3 +37,7 @@ project.assets.json
 
 
 AppData/
+
+
+.worktrees/
+.superpowers/
