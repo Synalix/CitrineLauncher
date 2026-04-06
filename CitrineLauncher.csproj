@@ -33,4 +33,8 @@
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
     </Compile>
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/skinview3d.min.js" />
+  </ItemGroup>
 </Project>
