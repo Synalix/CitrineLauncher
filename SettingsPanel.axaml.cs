@@ -86,6 +86,36 @@ namespace CitrineLauncher
                 }
             };
 
+            // Microsoft account login
+            AddMicrosoftButton.Click += async (s, e) =>
+            {
+                AddMicrosoftButton.IsEnabled = false;
+                try
+                {
+                    var (username, _) = await MicrosoftAuth.AuthenticateAsync();
+                    if (!string.IsNullOrEmpty(username))
+                    {
+                        if (!settings.Accounts.Any(a =>
+                                a.Type == "Microsoft" &&
+                                string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            settings.Accounts.Add(new Account { Username = username, Type = "Microsoft" });
+                            RefreshAccountList();
+                            settings.Save();
+                            SettingsSaved?.Invoke(this, settings);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Microsoft auth error: {ex.Message}");
+                }
+                finally
+                {
+                    AddMicrosoftButton.IsEnabled = true;
+                }
+            };
+
             ChangeFolderButton.Click += (s, e) =>
             {
                 if (!_isEditingFolder)

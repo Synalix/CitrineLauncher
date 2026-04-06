@@ -7,6 +7,7 @@ using CmlLib.Core.ProcessBuilder;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace CitrineLauncher
@@ -84,9 +85,18 @@ namespace CitrineLauncher
                 // Bug fix: removed redundant Task.Run wrapper - InstallAsync is already async
                 await launcher!.InstallAsync(selectedVersion);
 
+                var account = settings.Accounts.FirstOrDefault(a =>
+                    string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
+
+                MSession session;
+                if (account?.Type == "Microsoft")
+                    session = await Handlers.MicrosoftAuth.GetSessionAsync();
+                else
+                    session = MSession.CreateOfflineSession(username);
+
                 var launchOptions = new MLaunchOption
                 {
-                    Session = MSession.CreateOfflineSession(username),
+                    Session = session,
                     MaximumRamMb = settings.MaxRam,
                     // Bug fix #10: MinRam was saved but never used
                     MinimumRamMb = settings.MinRam
