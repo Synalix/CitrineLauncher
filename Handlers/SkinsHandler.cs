@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 
-namespace CitrineLauncher
+namespace CitrineLauncher.Handlers
 {
     public static class SkinsHandler
     {

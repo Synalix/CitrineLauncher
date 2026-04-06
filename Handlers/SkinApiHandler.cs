@@ -41,19 +41,19 @@ namespace CitrineLauncher.Handlers
         private const string SkinsUrl   = "https://api.minecraftservices.com/minecraft/profile/skins";
         private const string CapesUrl   = "https://api.minecraftservices.com/minecraft/profile/capes/active";
 
-        private static HttpClient CreateClient(string accessToken)
+        private static readonly HttpClient _http = new();
+
+        private static void ApplyAuth(string accessToken)
         {
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization =
+            _http.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", accessToken);
-            return client;
         }
 
         public static async Task<MinecraftProfile> GetProfileAsync(
             string accessToken, CancellationToken ct = default)
         {
-            using var client = CreateClient(accessToken);
-            var response = await client.GetAsync(ProfileUrl, ct);
+            ApplyAuth(accessToken);
+            var response = await _http.GetAsync(ProfileUrl, ct);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(ct);
             return JsonSerializer.Deserialize<MinecraftProfile>(json)
@@ -63,39 +63,38 @@ namespace CitrineLauncher.Handlers
         public static async Task UploadSkinAsync(
             string accessToken, string filePath, string model, CancellationToken ct = default)
         {
-            using var client = CreateClient(accessToken);
+            ApplyAuth(accessToken);
             using var form = new MultipartFormDataContent();
             var fileBytes = await File.ReadAllBytesAsync(filePath, ct);
             var fileContent = new ByteArrayContent(fileBytes);
             fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
             form.Add(fileContent, "file", Path.GetFileName(filePath));
             form.Add(new StringContent(model.ToUpper()), "variant");
-            var response = await client.PostAsync(SkinsUrl, form, ct);
+            var response = await _http.PostAsync(SkinsUrl, form, ct);
             response.EnsureSuccessStatusCode();
         }
 
         public static async Task<byte[]> DownloadSkinBytesAsync(
             string skinUrl, CancellationToken ct = default)
         {
-            using var client = new HttpClient();
-            return await client.GetByteArrayAsync(skinUrl, ct);
+            return await _http.GetByteArrayAsync(skinUrl, ct);
         }
 
         public static async Task SetActiveCapeAsync(
             string accessToken, string capeId, CancellationToken ct = default)
         {
-            using var client = CreateClient(accessToken);
+            ApplyAuth(accessToken);
             var body = JsonSerializer.Serialize(new { capeId });
             var content = new StringContent(body, Encoding.UTF8, "application/json");
-            var response = await client.PutAsync(CapesUrl, content, ct);
+            var response = await _http.PutAsync(CapesUrl, content, ct);
             response.EnsureSuccessStatusCode();
         }
 
         public static async Task DisableCapeAsync(
             string accessToken, CancellationToken ct = default)
         {
-            using var client = CreateClient(accessToken);
-            var response = await client.DeleteAsync(CapesUrl, ct);
+            ApplyAuth(accessToken);
+            var response = await _http.DeleteAsync(CapesUrl, ct);
             response.EnsureSuccessStatusCode();
         }
     }
