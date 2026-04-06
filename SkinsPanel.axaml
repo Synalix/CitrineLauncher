@@ -1,0 +1,226 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:handlers="clr-namespace:CitrineLauncher.Handlers"
+             xmlns:webview="clr-namespace:WebView.Avalonia;assembly=WebView.Avalonia"
+             x:Class="CitrineLauncher.SkinsPanel"
+             Background="#121212">
+
+    <UserControl.Styles>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{StaticResource CitrineBrush}"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="{StaticResource CitrineHover}"/>
+        </Style>
+        <Style Selector="Button.primary:disabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="Button.secondary:pointerover">
+            <Setter Property="Background" Value="#3A3A3A"/>
+        </Style>
+        <Style Selector="Button.secondary:disabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+        <Style Selector="Button.model-btn">
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="Button.model-btn.active">
+            <Setter Property="Background" Value="{StaticResource CitrineBrush}"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="#222222"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource CitrineBrush}"/>
+            <Setter Property="LetterSpacing" Value="2"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="BorderBrush" Value="#3A3A3A"/>
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="#1A1A1A"/>
+            <Setter Property="BorderBrush" Value="#333333"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="2*, 3*">
+
+        <!-- Left: 3D Preview -->
+        <Border Grid.Column="0" Background="#0D0D0D">
+            <webview:WebView x:Name="SkinWebView"/>
+        </Border>
+
+        <!-- Right: Controls -->
+        <Grid Grid.Column="1" RowDefinitions="Auto, *">
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="#1A1A1A"
+                    BorderBrush="#252525" BorderThickness="0,0,0,1"
+                    Padding="24,16">
+                <Grid ColumnDefinitions="Auto, *">
+                    <Button x:Name="BackButton" Grid.Column="0"
+                            Background="Transparent" BorderThickness="0"
+                            Width="36" Height="36" CornerRadius="8" Padding="0"
+                            ToolTip.Tip="Back to launcher">
+                        <Path Data="M15,18 L9,12 L15,6"
+                              Stroke="White" StrokeThickness="2" StrokeLineCap="Round"
+                              Width="14" Height="14" Stretch="None"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0"
+                                VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="CITRINE" FontSize="10" FontWeight="Black"
+                                   Foreground="{StaticResource CitrineBrush}" LetterSpacing="3"/>
+                        <TextBlock Text="Skins" FontSize="20" FontWeight="Bold" Foreground="White"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Scrollable controls -->
+            <ScrollViewer Grid.Row="1" Padding="24,20,24,20">
+                <StackPanel Spacing="4">
+
+                    <!-- Account selector -->
+                    <TextBlock Text="ACCOUNT" Classes="section-title"/>
+                    <Border Classes="card">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Editing skin for:" Classes="label"/>
+                            <ComboBox x:Name="AccountCombo" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="handlers:Account">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="{Binding Username}"/>
+                                            <TextBlock Text="(" Foreground="Gray"/>
+                                            <TextBlock Text="{Binding Type}"
+                                                       Foreground="{StaticResource CitrineBrush}"/>
+                                            <TextBlock Text=")" Foreground="Gray"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Skin card -->
+                    <TextBlock Text="SKIN" Classes="section-title"/>
+                    <Border Classes="card">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock x:Name="SkinNameLabel" Text="Default skin"
+                                           Classes="label" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="LoadingLabel" Grid.Column="1"
+                                           Text="Loading..." FontSize="11" Opacity="0.5"
+                                           VerticalAlignment="Center" IsVisible="False"/>
+                            </Grid>
+
+                            <!-- Model toggle -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Model" Classes="label"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="ClassicModelBtn"
+                                            Classes="model-btn" Content="Classic"/>
+                                    <Button x:Name="SlimModelBtn"
+                                            Classes="model-btn" Content="Slim (Alex)"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Action buttons -->
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="UploadSkinBtn"
+                                        Classes="primary" Content="UPLOAD SKIN"/>
+                                <Button x:Name="DownloadSkinBtn"
+                                        Classes="secondary" Content="DOWNLOAD"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="SkinErrorLabel" Foreground="#FF5555"
+                                       FontSize="12" IsVisible="False" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Capes card (Microsoft only) -->
+                    <StackPanel x:Name="CapesSection">
+                        <TextBlock Text="CAPES" Classes="section-title"/>
+                        <Border Classes="card">
+                            <StackPanel Spacing="12">
+                                <ListBox x:Name="CapesList" MaxHeight="160">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="handlers:MinecraftCape">
+                                            <Border Padding="10,8" Background="#2A2A2A"
+                                                    Margin="4,2" CornerRadius="6">
+                                                <Grid ColumnDefinitions="*, Auto">
+                                                    <TextBlock Text="{Binding Alias}"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="13"/>
+                                                    <TextBlock x:Name="ActiveBadge"
+                                                               Grid.Column="1" Text="ACTIVE"
+                                                               Foreground="{StaticResource CitrineBrush}"
+                                                               FontSize="10" FontWeight="Bold"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="False"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <Button x:Name="ToggleCapeBtn" Classes="secondary"
+                                        Content="ENABLE CAPE" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="CapeErrorLabel" Foreground="#FF5555"
+                                           FontSize="12" IsVisible="False" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Offline notice -->
+                    <Border x:Name="OfflineNotice" Classes="card" IsVisible="False">
+                        <TextBlock FontSize="12" Opacity="0.5" TextWrapping="Wrap"
+                                   Text="Skin preview only — offline skins apply locally and may not appear in multiplayer."/>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+    </Grid>
+</UserControl>

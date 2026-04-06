@@ -32,6 +32,9 @@
     <Compile Update="OfflineAccountDialog.axaml.cs">
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
     </Compile>
+    <Compile Update="SkinsPanel.axaml.cs">
+      <DependentUpon>SkinsPanel.axaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
