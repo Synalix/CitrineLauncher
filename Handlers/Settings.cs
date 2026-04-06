@@ -13,6 +13,8 @@ namespace CitrineLauncher.Handlers
     {
         public string Username { get; set; } = string.Empty;
         public string Type { get; set; } = "Offline"; // "Offline" or "Microsoft"
+        public string SkinPath { get; set; } = string.Empty;  // offline only: local PNG path
+        public string SkinModel { get; set; } = "classic";    // "classic" or "slim"
     }
 
     public class Settings : INotifyPropertyChanged
