@@ -1,10 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <InformationalVersion>1.2.1</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,7 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Bug fix #8: was "OfflineAccountDialog.axam" (missing trailing l) -->
     <Compile Update="OfflineAccountDialog.axaml.cs">
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
     </Compile>

@@ -55,7 +55,10 @@ namespace CitrineLauncher
                 else if (OperatingSystem.IsMacOS()) Process.Start("open", path);
                 else if (OperatingSystem.IsLinux()) Process.Start("xdg-open", path);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to open folder '{path}': {ex.Message}");
+            }
         }
     }
 }

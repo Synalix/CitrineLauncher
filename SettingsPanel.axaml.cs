@@ -1,12 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 using CitrineLauncher.Handlers;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace CitrineLauncher
 {
@@ -29,7 +27,7 @@ namespace CitrineLauncher
             DataContext = settings;
 
             // Populate account list
-            AccountsList.ItemsSource = settings.Accounts;
+            AccountsList.ItemsSource = settings.Accounts.ToArray();
 
             // RAM custom toggle visibility
             UpdateRamVisibility();
@@ -72,6 +70,13 @@ namespace CitrineLauncher
                     var result = await dialog.ShowDialog<string?>(parentWindow);
                     if (!string.IsNullOrEmpty(result))
                     {
+                        if (settings.Accounts.Any(account =>
+                                account.Type == "Offline" &&
+                                string.Equals(account.Username, result, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return;
+                        }
+
                         settings.Accounts.Add(new Account { Username = result, Type = "Offline" });
                         RefreshAccountList();
                         settings.Save();
@@ -81,68 +86,31 @@ namespace CitrineLauncher
                 }
             };
 
-            // Microsoft placeholder
-            AddMicrosoftButton.Click += (s, e) =>
-            {
-                // TODO: Microsoft account integration
-            };
-
-            // Folder change - only writes to settings on SAVE, not on every keystroke (bug #7)
             ChangeFolderButton.Click += (s, e) =>
             {
                 if (!_isEditingFolder)
                 {
-                    // Enter edit mode
-                    FolderPathTextBlock.IsVisible = false;
-                    FolderPathTextBox.IsVisible = true;
+                    SetFolderEditMode(true);
                     FolderPathTextBox.Text = settings.MinecraftPath;
                     FolderPathTextBox.Focus();
-                    ChangeFolderButton.Content = "SAVE";
-                    _isEditingFolder = true;
                 }
                 else
                 {
-                    // Save - only now do we write to settings
                     var newPath = FolderPathTextBox.Text ?? string.Empty;
                     if (!string.IsNullOrWhiteSpace(newPath))
                     {
                         settings.MinecraftPath = newPath;
                         FolderPathTextBlock.Text = newPath;
                     }
-                    FolderPathTextBlock.IsVisible = true;
-                    FolderPathTextBox.IsVisible = false;
-                    ChangeFolderButton.Content = "CHANGE";
-                    _isEditingFolder = false;
+                    SetFolderEditMode(false);
                 }
             };
 
-            // Cancel on focus loss
-            FolderPathTextBox.LostFocus += (s, e) =>
-            {
-                if (_isEditingFolder)
-                {
-                    Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        if (_isEditingFolder)
-                        {
-                            FolderPathTextBlock.IsVisible = true;
-                            FolderPathTextBox.IsVisible = false;
-                            ChangeFolderButton.Content = "CHANGE";
-                            _isEditingFolder = false;
-                        }
-                    }, DispatcherPriority.Input);
-                }
-            };
-
-            // Cancel on Escape
             FolderPathTextBox.KeyDown += (s, e) =>
             {
                 if (_isEditingFolder && e.Key == Avalonia.Input.Key.Escape)
                 {
-                    FolderPathTextBlock.IsVisible = true;
-                    FolderPathTextBox.IsVisible = false;
-                    ChangeFolderButton.Content = "CHANGE";
-                    _isEditingFolder = false;
+                    SetFolderEditMode(false);
                     e.Handled = true;
                 }
             };
@@ -170,8 +138,17 @@ namespace CitrineLauncher
 
         private void RefreshAccountList()
         {
+            AccountsList.SelectedIndex = -1;
             AccountsList.ItemsSource = null;
-            AccountsList.ItemsSource = Settings.Instance.Accounts;
+            AccountsList.ItemsSource = Settings.Instance.Accounts.ToArray();
+        }
+
+        private void SetFolderEditMode(bool isEditing)
+        {
+            _isEditingFolder = isEditing;
+            FolderPathTextBlock.IsVisible = !isEditing;
+            FolderPathTextBox.IsVisible = isEditing;
+            ChangeFolderButton.Content = isEditing ? "SAVE" : "CHANGE";
         }
 
         public void SwitchToTab(string tabName)
@@ -211,10 +188,11 @@ namespace CitrineLauncher
         {
             if (AccountsList.SelectedItem is Account selectedAccount)
             {
-                Settings.Instance.Accounts.Remove(selectedAccount);
-                Settings.Instance.Save();
-                RefreshAccountList();
-                SettingsSaved?.Invoke(this, Settings.Instance);
+                if (Settings.Instance.RemoveAccount(selectedAccount))
+                {
+                    RefreshAccountList();
+                    SettingsSaved?.Invoke(this, Settings.Instance);
+                }
             }
         }
 

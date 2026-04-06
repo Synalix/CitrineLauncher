@@ -5,6 +5,7 @@ using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.ProcessBuilder;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -12,10 +13,9 @@ namespace CitrineLauncher
 {
     public partial class MainWindow
     {
-        private async void InitializeLauncher()
+        private MinecraftLauncher ConfigureLauncher(string minecraftPath)
         {
-            // Bug fix #1: always read from Settings so custom paths work
-            var path = new MinecraftPath(Handlers.Settings.Instance.MinecraftPath);
+            var path = new MinecraftPath(minecraftPath);
             launcher = new MinecraftLauncher(path);
 
             launcher.FileProgressChanged += (s, args) =>
@@ -31,9 +31,17 @@ namespace CitrineLauncher
                 });
             };
 
+            return launcher;
+        }
+
+        private async void InitializeLauncher()
+        {
+            // Bug fix #1: always read from Settings so custom paths work
+            var currentLauncher = ConfigureLauncher(Handlers.Settings.Instance.MinecraftPath);
+
             try
             {
-                var versions = await launcher.GetAllVersionsAsync();
+                var versions = await currentLauncher.GetAllVersionsAsync();
 
                 Dispatcher.UIThread.Post(() =>
                 {

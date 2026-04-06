@@ -17,6 +17,7 @@ namespace CitrineLauncher
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Fatal error: {ex}");
+                Environment.Exit(1);
             }
         }
 

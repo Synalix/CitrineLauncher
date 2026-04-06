@@ -13,6 +13,9 @@ namespace CitrineLauncher
     {
         private async void StartParticleAnimation()
         {
+            if (_particleCts != null)
+                return;
+
             _particleCts = new CancellationTokenSource();
             var token = _particleCts.Token;
             try

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CitrineLauncher.Handlers;
@@ -46,7 +47,9 @@ namespace CitrineLauncher
             {
                 Opacity = 0,
                 RenderTransform = new ScaleTransform(0.8, 0.8),
-                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative)
+                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
             };
 
             _currentPanel.CloseRequested += async (s, e) =>
@@ -73,8 +76,7 @@ namespace CitrineLauncher
                 var x = Math.Max(0, (centerPanel.Bounds.Width - panelWidth) / 2);
                 var y = Math.Max(0, (centerPanel.Bounds.Height - panelHeight) / 2);
 
-                Canvas.SetLeft(_currentPanel, x);
-                Canvas.SetTop(_currentPanel, y);
+                _currentPanel.Margin = new Thickness(x, y, 0, 0);
             });
 
             // Animate in

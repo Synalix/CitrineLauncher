@@ -27,7 +27,10 @@ namespace CitrineLauncher.Handlers
                     return JsonSerializer.Deserialize<ConfigData>(json) ?? new ConfigData();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load launcher config: {ex.Message}");
+            }
             return new ConfigData();
         }
 
@@ -42,7 +45,10 @@ namespace CitrineLauncher.Handlers
                 var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(ConfigPath, json);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to save launcher config: {ex.Message}");
+            }
         }
     }
 }

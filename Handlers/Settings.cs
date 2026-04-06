@@ -24,9 +24,9 @@ namespace CitrineLauncher.Handlers
 
         private static string _currentSettingsPath = Path.Combine(DefaultMinecraftPath, "citrine.json");
 
-        // Prevents Save() from firing on every property set during JSON deserialization
+        // Prevents Save() from firing while JSON deserialization is populating the object
         [JsonIgnore]
-        private bool _isLoading = false;
+        private bool _isLoading = true;
 
         private string _username = string.Empty;
         private int _maxRam = 2048;
@@ -44,62 +44,62 @@ namespace CitrineLauncher.Handlers
         public string Username
         {
             get => _username;
-            set { _username = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _username, value);
         }
 
         public int MaxRam
         {
             get => _maxRam;
-            set { _maxRam = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _maxRam, value);
         }
 
         public int MinRam
         {
             get => _minRam;
-            set { _minRam = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _minRam, value);
         }
 
         public bool UseCustomMinRam
         {
             get => _useCustomMinRam;
-            set { _useCustomMinRam = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _useCustomMinRam, value);
         }
 
         public bool UseCustomMaxRam
         {
             get => _useCustomMaxRam;
-            set { _useCustomMaxRam = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _useCustomMaxRam, value);
         }
 
         // Renamed from AutoCloseLauncher - it minimizes, not closes
         public bool MinimizeOnLaunch
         {
             get => _minimizeOnLaunch;
-            set { _minimizeOnLaunch = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _minimizeOnLaunch, value);
         }
 
         public bool ShowConsole
         {
             get => _showConsole;
-            set { _showConsole = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _showConsole, value);
         }
 
         public string Theme
         {
             get => _theme;
-            set { _theme = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _theme, value);
         }
 
         public int ParticleDensity
         {
             get => _particleDensity;
-            set { _particleDensity = Math.Clamp(value, 0, 100); OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _particleDensity, Math.Clamp(value, 0, 100));
         }
 
         public bool ParticlesEnabled
         {
             get => _particlesEnabled;
-            set { _particlesEnabled = value; OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _particlesEnabled, value);
         }
 
         public string MinecraftPath
@@ -125,7 +125,31 @@ namespace CitrineLauncher.Handlers
             // Null-guard: JsonSerializer.Deserialize bypasses the constructor, so _accounts
             // can be null if the JSON contains "Accounts": null or the key is absent.
             get => _accounts ??= new List<Account>();
-            set { _accounts = value ?? new List<Account>(); OnPropertyChanged(); Save(); }
+            set => SetProperty(ref _accounts, value ?? new List<Account>());
+        }
+
+        public bool RemoveAccount(Account account)
+        {
+            if (!_accounts.Remove(account))
+                return false;
+
+            if (_accounts.Count == 0)
+            {
+                if (!string.IsNullOrEmpty(_username))
+                {
+                    _username = string.Empty;
+                    OnPropertyChanged(nameof(Username));
+                }
+            }
+            else if (string.Equals(_username, account.Username, StringComparison.OrdinalIgnoreCase))
+            {
+                _username = _accounts[0].Username;
+                OnPropertyChanged(nameof(Username));
+            }
+
+            OnPropertyChanged(nameof(Accounts));
+            Save();
+            return true;
         }
 
         // [JsonIgnore] prevents these from being written to the settings file
@@ -143,6 +167,17 @@ namespace CitrineLauncher.Handlers
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value))
+                return false;
+
+            field = value;
+            OnPropertyChanged(propertyName);
+            Save();
+            return true;
+        }
 
         public void Save()
         {
@@ -176,6 +211,7 @@ namespace CitrineLauncher.Handlers
                     if (settings != null)
                     {
                         _currentSettingsPath = path;
+                        settings._isLoading = false;
                         return settings;
                     }
                 }
@@ -190,7 +226,7 @@ namespace CitrineLauncher.Handlers
         private static Settings Load()
         {
             var config = LauncherConfig.Load();
-            var pathsToTry = new[] { config.LastMinecraftPath, DefaultMinecraftPath }
+            var pathsToTry = new[] { DefaultMinecraftPath, config.LastMinecraftPath }
                 .Where(p => !string.IsNullOrEmpty(p))
                 .Distinct()
                 .Select(p => Path.Combine(p, "citrine.json"))
@@ -212,6 +248,7 @@ namespace CitrineLauncher.Handlers
             var newSettings = new Settings();
             _currentSettingsPath = Path.Combine(DefaultMinecraftPath, "citrine.json");
             LauncherConfig.Save(DefaultMinecraftPath);
+            newSettings._isLoading = false;
             newSettings.Save();
             return newSettings;
         }

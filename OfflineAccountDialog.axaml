@@ -31,8 +31,10 @@
                     CornerRadius="6"/>
             <Button Content="Add" Width="80" Height="32"
                     Click="AddButton_Click"
-                    Background="{StaticResource CitrineBrush}" Foreground="Black"
-                    FontWeight="Bold" CornerRadius="6"/>
+                    Background="{StaticResource CitrineBrush}"
+                    Foreground="Black"
+                    FontWeight="Bold"
+                    CornerRadius="6"/>
         </StackPanel>
     </Grid>
 </Window>

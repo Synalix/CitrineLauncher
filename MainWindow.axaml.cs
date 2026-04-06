@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CmlLib.Core;
 using CitrineLauncher.Handlers;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,8 @@ namespace CitrineLauncher
         public MainWindow()
         {
             InitializeComponent();
+
+            Settings.Instance.PropertyChanged += Settings_PropertyChanged;
 
             // Wire up Dispatcher unhandled exception handler
             Dispatcher.UIThread.UnhandledException += (s, e) =>
@@ -68,10 +71,11 @@ namespace CitrineLauncher
             // 5. Effects
             ToggleParticlesButton.Click += ToggleParticlesButton_Click;
             ToggleParticlesButton.Opacity = Settings.Instance.ParticlesEnabled ? 1.0 : 0.5;
-            StartParticleAnimation();
+            Opened += (_, _) => StartParticleAnimation();
 
             this.Closed += (s, e) =>
             {
+                Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
                 _particleCts?.Cancel();
                 // Unsubscribe game process event so it doesn't post to a dead window
                 if (currentGameProcess != null)
@@ -81,32 +85,36 @@ namespace CitrineLauncher
 
         private void RefreshAccountList()
         {
-            var accounts = Settings.Instance.Accounts;
+            var accounts = Settings.Instance.Accounts.ToArray();
             var selectedAccount = accountCombo.SelectedItem as Account;
+            var savedUsername = Settings.Instance.Username;
 
-            accountCombo.ItemsSource = null;
             accountCombo.ItemsSource = accounts;
 
-            if (accounts.Count > 0)
+            if (accounts.Length > 0)
             {
-                if (selectedAccount != null && accounts.Contains(selectedAccount))
-                {
-                    accountCombo.SelectedItem = selectedAccount;
-                }
-                else
-                {
-                    var savedUsername = Settings.Instance.Username;
-                    var match = accounts.FirstOrDefault(a => a.Username == savedUsername);
-                    accountCombo.SelectedItem = match ?? accounts[0];
-                }
+                var match = accounts.FirstOrDefault(a => a.Username == savedUsername);
+                var fallbackSelection = selectedAccount != null && accounts.Contains(selectedAccount)
+                    ? selectedAccount
+                    : match ?? accounts[0];
+
+                accountCombo.SelectedIndex = Array.IndexOf(accounts, fallbackSelection);
             }
             else
             {
-                accountCombo.SelectedItem = null;
+                accountCombo.SelectedIndex = -1;
             }
 
             UpdateLaunchButtonState();
             UpdateTitleText();
+        }
+
+        private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Settings.MinecraftPath))
+            {
+                ConfigureLauncher(Settings.Instance.MinecraftPath);
+            }
         }
 
         private void UpdateLaunchButtonState()
@@ -128,18 +136,22 @@ namespace CitrineLauncher
                 : string.Empty;
         }
 
+        private void OpenSettings(string? initialTab = null)
+        {
+            SettingsHandler.ShowSettings(CenterPanel, HandleSettingsSaved, initialTab);
+        }
+
+        private void HandleSettingsSaved(Settings savedSettings)
+        {
+            if (!savedSettings.ParticlesEnabled)
+                ParticleCanvas.Children.Clear();
+
+            RefreshAccountList();
+        }
+
         private void AddAccountButton_Click(object? sender, RoutedEventArgs e)
         {
-            SettingsHandler.ShowSettings(
-                CenterPanel,
-                (savedSettings) =>
-                {
-                    if (!savedSettings.ParticlesEnabled)
-                        ParticleCanvas.Children.Clear();
-                    RefreshAccountList();
-                },
-                "Accounts"
-            );
+            OpenSettings("Accounts");
         }
 
         private void BtnSettings_Click(object? sender, RoutedEventArgs e)
@@ -149,15 +161,8 @@ namespace CitrineLauncher
                 SettingsHandler.CloseSettings(CenterPanel);
                 return;
             }
-            SettingsHandler.ShowSettings(
-                CenterPanel,
-                (savedSettings) =>
-                {
-                    if (!savedSettings.ParticlesEnabled)
-                        ParticleCanvas.Children.Clear();
-                    RefreshAccountList();
-                }
-            );
+
+            OpenSettings();
         }
 
         private void BtnUpdate_Click(object? sender, RoutedEventArgs e)
