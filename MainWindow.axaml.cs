@@ -172,7 +172,12 @@ namespace CitrineLauncher
 
         private void BtnSkins_Click(object? sender, RoutedEventArgs e)
         {
-            Debug.WriteLine("Skins clicked - not implemented yet");
+            if (Handlers.SkinsHandler.IsOpen)
+            {
+                Handlers.SkinsHandler.HideSkins(CenterPanel);
+                return;
+            }
+            Handlers.SkinsHandler.ShowSkins(CenterPanel);
         }
     }
 }
