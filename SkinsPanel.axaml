@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:handlers="clr-namespace:CitrineLauncher.Handlers"
-             xmlns:webview="clr-namespace:WebView.Avalonia;assembly=WebView.Avalonia"
              x:Class="CitrineLauncher.SkinsPanel"
              Background="#121212">
 
@@ -89,7 +88,7 @@
 
         <!-- Left: 3D Preview -->
         <Border Grid.Column="0" Background="#0D0D0D">
-            <webview:WebView x:Name="SkinWebView"/>
+            <NativeWebView x:Name="SkinWebView"/>
         </Border>
 
         <!-- Right: Controls -->
@@ -114,6 +113,10 @@
                         <TextBlock Text="CITRINE" FontSize="10" FontWeight="Black"
                                    Foreground="{StaticResource CitrineBrush}" LetterSpacing="3"/>
                         <TextBlock Text="Skins" FontSize="20" FontWeight="Bold" Foreground="White"/>
+                        <TextBlock x:Name="SelectedAccountLabel"
+                                   Text="Linked to launcher selection"
+                                   FontSize="12"
+                                   Opacity="0.55"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -121,27 +124,6 @@
             <!-- Scrollable controls -->
             <ScrollViewer Grid.Row="1" Padding="24,20,24,20">
                 <StackPanel Spacing="4">
-
-                    <!-- Account selector -->
-                    <TextBlock Text="ACCOUNT" Classes="section-title"/>
-                    <Border Classes="card">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Editing skin for:" Classes="label"/>
-                            <ComboBox x:Name="AccountCombo" HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="handlers:Account">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <TextBlock Text="{Binding Username}"/>
-                                            <TextBlock Text="(" Foreground="Gray"/>
-                                            <TextBlock Text="{Binding Type}"
-                                                       Foreground="{StaticResource CitrineBrush}"/>
-                                            <TextBlock Text=")" Foreground="Gray"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
 
                     <!-- Skin card -->
                     <TextBlock Text="SKIN" Classes="section-title"/>

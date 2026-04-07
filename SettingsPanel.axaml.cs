@@ -199,6 +199,7 @@ namespace CitrineLauncher
         {
             if (AccountsList.SelectedItem is Account selectedAccount && selectedAccount.Type == "Offline")
             {
+                var previousUsername = selectedAccount.Username;
                 var dialog = new OfflineAccountDialog(selectedAccount.Username);
                 var parentWindow = this.VisualRoot as Window;
                 if (parentWindow != null)
@@ -207,8 +208,12 @@ namespace CitrineLauncher
                     if (result != null)
                     {
                         selectedAccount.Username = result;
+                        if (string.Equals(Settings.Instance.Username, previousUsername, StringComparison.OrdinalIgnoreCase))
+                            Settings.Instance.Username = result;
+
                         Settings.Instance.Save();
                         RefreshAccountList();
+                        SettingsSaved?.Invoke(this, Settings.Instance);
                     }
                 }
             }

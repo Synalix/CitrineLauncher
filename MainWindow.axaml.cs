@@ -177,6 +177,7 @@ namespace CitrineLauncher
                 Handlers.SkinsHandler.HideSkins(CenterPanel);
                 return;
             }
+
             Handlers.SkinsHandler.ShowSkins(CenterPanel);
         }
     }

@@ -3,11 +3,11 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CitrineLauncher.Handlers;
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using WebViewCore;
 
 namespace CitrineLauncher
 {
@@ -16,12 +16,12 @@ namespace CitrineLauncher
         public event EventHandler? CloseRequested;
 
         private CancellationTokenSource _cts = new();
+        private Account? _activeAccount;
         private MinecraftProfile? _currentProfile;
         private MinecraftCape? _activeCape;
         private bool _capeEnabled;
         private string _currentModel = "classic";
         private bool _webViewReady;
-        private IWebViewControl? _webViewControl;
 
         public SkinsPanel()
         {
@@ -33,44 +33,89 @@ namespace CitrineLauncher
         {
             BackButton.Click += (s, e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 
-            var accounts = Settings.Instance.Accounts.ToArray();
-            AccountCombo.ItemsSource = accounts;
-            var savedUsername = Settings.Instance.Username;
-            var defaultAccount = accounts.FirstOrDefault(a => a.Username == savedUsername)
-                ?? accounts.FirstOrDefault();
-            if (defaultAccount != null)
-                AccountCombo.SelectedItem = defaultAccount;
-
-            AccountCombo.SelectionChanged += (s, e) => LoadSelectedAccount();
             ClassicModelBtn.Click += (s, e) => SetModel("classic");
             SlimModelBtn.Click    += (s, e) => SetModel("slim");
             UploadSkinBtn.Click        += UploadSkin_Click;
             DownloadSkinBtn.Click      += DownloadSkin_Click;
             ToggleCapeBtn.Click        += ToggleCape_Click;
             CapesList.SelectionChanged += CapesList_SelectionChanged;
-            this.Loaded += async (s, e) => await SetupWebView();
-            this.Unloaded += (s, e) => _cts.Dispose();
+            Settings.Instance.PropertyChanged += Settings_PropertyChanged;
+            this.Loaded += (_, _) => SetupWebView();
+            this.Unloaded += (_, _) =>
+            {
+                _cts.Dispose();
+                Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
+            };
         }
 
-        private async Task SetupWebView()
+        private void SetupWebView()
         {
-            // Resolve the WebView control at runtime to avoid source-generator field dependency
-            var webViewControl = this.FindControl<Control>("SkinWebView");
-            _webViewControl = webViewControl as IWebViewControl;
-            if (_webViewControl == null)
-                System.Diagnostics.Debug.WriteLine("SkinsPanel: WebView control not found or does not implement IWebViewControl — skin preview unavailable.");
+            SkinWebView.NavigationCompleted += (_, e) =>
+            {
+                if (!e.IsSuccess)
+                    return;
+
+                _webViewReady = true;
+                LoadSelectedAccount();
+            };
 
             var htmlPath = SkinViewerHtml.WriteTempFile();
-            var url = new Uri("file:///" + htmlPath.Replace("\\", "/"));
-            _webViewControl?.Navigate(url);
-            await Task.Delay(1500);
-            _webViewReady = true;
-            LoadSelectedAccount();
+            SkinWebView.Navigate(new Uri(htmlPath));
+        }
+
+        private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Settings.Username) ||
+                e.PropertyName == nameof(Settings.Accounts) ||
+                e.PropertyName == nameof(Settings.MinecraftPath))
+            {
+                if (_webViewReady)
+                    LoadSelectedAccount();
+                else
+                    UpdateSelectedAccountLabel(ResolveSelectedAccount());
+            }
+        }
+
+        private Account? ResolveSelectedAccount()
+        {
+            var accounts = Settings.Instance.Accounts.ToArray();
+            if (accounts.Length == 0)
+                return null;
+
+            var savedUsername = Settings.Instance.Username;
+            var selectedAccount = accounts.FirstOrDefault(account =>
+                string.Equals(account.Username, savedUsername, StringComparison.OrdinalIgnoreCase));
+
+            return selectedAccount ?? accounts.FirstOrDefault();
+        }
+
+        private void UpdateSelectedAccountLabel(Account? account)
+        {
+            SelectedAccountLabel.Text = account == null
+                ? "No account selected"
+                : $"{account.Username} ({account.Type})";
         }
 
         private void LoadSelectedAccount()
         {
-            if (AccountCombo.SelectedItem is not Account account) return;
+            var account = ResolveSelectedAccount();
+            _activeAccount = account;
+            UpdateSelectedAccountLabel(account);
+
+            if (account == null)
+            {
+                _currentProfile = null;
+                _activeCape = null;
+                _capeEnabled = false;
+                CapesSection.IsVisible = false;
+                OfflineNotice.IsVisible = false;
+                CapesList.ItemsSource = null;
+                SkinNameLabel.Text = "No account selected";
+                if (_webViewReady)
+                    _ = ExecuteViewerScript("loadDefault()");
+                return;
+            }
+
             _cts.Cancel();
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
@@ -142,6 +187,16 @@ namespace CitrineLauncher
             _activeCape = null;
             CapesList.ItemsSource = null;
 
+            if (string.IsNullOrEmpty(account.SkinPath))
+            {
+                var fallbackPath = Path.Combine(Settings.Instance.MinecraftPath, "citrine-skins", $"{account.Username}.png");
+                if (File.Exists(fallbackPath))
+                {
+                    account.SkinPath = fallbackPath;
+                    Settings.Instance.Save();
+                }
+            }
+
             if (!string.IsNullOrEmpty(account.SkinPath) && !File.Exists(account.SkinPath))
             {
                 account.SkinPath = string.Empty;
@@ -170,7 +225,8 @@ namespace CitrineLauncher
 
         private async void UploadSkin_Click(object? sender, RoutedEventArgs e)
         {
-            if (AccountCombo.SelectedItem is not Account account) return;
+            var account = ResolveSelectedAccount();
+            if (account == null) return;
             var topLevel = TopLevel.GetTopLevel(this);
             if (topLevel == null) return;
 
@@ -218,7 +274,8 @@ namespace CitrineLauncher
 
         private async void DownloadSkin_Click(object? sender, RoutedEventArgs e)
         {
-            if (AccountCombo.SelectedItem is not Account account) return;
+            var account = ResolveSelectedAccount();
+            if (account == null) return;
             var topLevel = TopLevel.GetTopLevel(this);
             if (topLevel == null) return;
 
@@ -254,7 +311,8 @@ namespace CitrineLauncher
 
         private async void ToggleCape_Click(object? sender, RoutedEventArgs e)
         {
-            if (AccountCombo.SelectedItem is not Account { Type: "Microsoft" }) return;
+            var account = ResolveSelectedAccount();
+            if (account?.Type != "Microsoft") return;
             ClearErrors();
             ToggleCapeBtn.IsEnabled = false;
             try
@@ -292,7 +350,7 @@ namespace CitrineLauncher
             if (!_capeEnabled) return;
             if (CapesList.SelectedItem is not MinecraftCape cape) return;
             if (_activeCape?.Id == cape.Id) return;
-            if (AccountCombo.SelectedItem is not Account { Type: "Microsoft" }) return;
+            if (ResolveSelectedAccount()?.Type != "Microsoft") return;
             ClearErrors();
             try
             {
@@ -308,7 +366,8 @@ namespace CitrineLauncher
         {
             _currentModel = model;
             SetModelButtons(model);
-            if (AccountCombo.SelectedItem is Account { Type: "Offline" } account)
+            var account = ResolveSelectedAccount();
+            if (account?.Type == "Offline")
             {
                 account.SkinModel = model;
                 Settings.Instance.Save();
@@ -321,7 +380,7 @@ namespace CitrineLauncher
                     });
                 }
             }
-            else if (AccountCombo.SelectedItem is Account && _currentProfile != null)
+            else if (account != null && _currentProfile != null)
             {
                 var skin = _currentProfile.Skins.FirstOrDefault(s => s.State == "ACTIVE");
                 if (skin != null && _webViewReady)
@@ -347,8 +406,8 @@ namespace CitrineLauncher
         {
             try
             {
-                if (_webViewControl != null)
-                    await _webViewControl.ExecuteScriptAsync(script);
+                if (_webViewReady)
+                    await SkinWebView.InvokeScript(script);
             }
             catch (Exception ex)
             {
