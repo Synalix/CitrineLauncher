@@ -49,6 +49,7 @@ namespace CitrineLauncher
             ToggleCapeBtn.Click        += ToggleCape_Click;
             CapesList.SelectionChanged += CapesList_SelectionChanged;
             this.Loaded += async (s, e) => await SetupWebView();
+            this.Unloaded += (s, e) => _cts.Dispose();
         }
 
         private async Task SetupWebView()
@@ -56,6 +57,8 @@ namespace CitrineLauncher
             // Resolve the WebView control at runtime to avoid source-generator field dependency
             var webViewControl = this.FindControl<Control>("SkinWebView");
             _webViewControl = webViewControl as IWebViewControl;
+            if (_webViewControl == null)
+                System.Diagnostics.Debug.WriteLine("SkinsPanel: WebView control not found or does not implement IWebViewControl — skin preview unavailable.");
 
             var htmlPath = SkinViewerHtml.WriteTempFile();
             var url = new Uri("file:///" + htmlPath.Replace("\\", "/"));
@@ -152,7 +155,11 @@ namespace CitrineLauncher
             if (!string.IsNullOrEmpty(account.SkinPath) && _webViewReady)
             {
                 SkinNameLabel.Text = Path.GetFileName(account.SkinPath);
-                _ = ExecuteViewerScript($"setSkin('{FileToDataUrl(account.SkinPath)}', '{model}')");
+                var skinPath = account.SkinPath;
+                _ = Task.Run(async () => {
+                    var dataUrl = await FileToDataUrl(skinPath);
+                    await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+                });
             }
             else
             {
@@ -202,7 +209,8 @@ namespace CitrineLauncher
                     Settings.Instance.Save();
                     SkinNameLabel.Text = Path.GetFileName(dest);
                 }
-                await ExecuteViewerScript($"setSkin('{FileToDataUrl(filePath)}', '{_currentModel}')");
+                var dataUrl = await FileToDataUrl(filePath);
+                await ExecuteViewerScript($"setSkin('{dataUrl}', '{_currentModel}')");
             }
             catch (Exception ex) { ShowSkinError($"Upload failed: {ex.Message}"); }
             finally { SetActionsEnabled(true); }
@@ -225,6 +233,7 @@ namespace CitrineLauncher
             var dest = file.TryGetLocalPath();
             if (string.IsNullOrEmpty(dest)) return;
 
+            SetActionsEnabled(false);
             try
             {
                 if (account.Type == "Microsoft" && _currentProfile != null)
@@ -240,6 +249,7 @@ namespace CitrineLauncher
                     ShowSkinError("No skin to download.");
             }
             catch (Exception ex) { ShowSkinError($"Download failed: {ex.Message}"); }
+            finally { SetActionsEnabled(true); }
         }
 
         private async void ToggleCape_Click(object? sender, RoutedEventArgs e)
@@ -255,7 +265,7 @@ namespace CitrineLauncher
                     await SkinApiHandler.DisableCapeAsync(session.AccessToken);
                     _capeEnabled = false;
                     _activeCape  = null;
-                    ToggleCapeBtn.Content = "DISABLE CAPE";
+                    ToggleCapeBtn.Content = "ENABLE CAPE";
                     await ExecuteViewerScript("clearCape()");
                 }
                 else
@@ -303,7 +313,13 @@ namespace CitrineLauncher
                 account.SkinModel = model;
                 Settings.Instance.Save();
                 if (_webViewReady && !string.IsNullOrEmpty(account.SkinPath))
-                    _ = ExecuteViewerScript($"setSkin('{FileToDataUrl(account.SkinPath)}', '{model}')");
+                {
+                    var skinPath = account.SkinPath;
+                    _ = Task.Run(async () => {
+                        var dataUrl = await FileToDataUrl(skinPath);
+                        await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+                    });
+                }
             }
             else if (AccountCombo.SelectedItem is Account && _currentProfile != null)
             {
@@ -340,9 +356,9 @@ namespace CitrineLauncher
             }
         }
 
-        private static string FileToDataUrl(string filePath)
+        private static async Task<string> FileToDataUrl(string filePath)
         {
-            var bytes = File.ReadAllBytes(filePath);
+            var bytes = await File.ReadAllBytesAsync(filePath);
             return "data:image/png;base64," + Convert.ToBase64String(bytes);
         }
 
