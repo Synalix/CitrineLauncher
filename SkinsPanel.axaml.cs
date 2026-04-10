@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using CitrineLauncher.Handlers;
 using System;
 using System.ComponentModel;
@@ -213,7 +214,7 @@ namespace CitrineLauncher
                 var skinPath = account.SkinPath;
                 _ = Task.Run(async () => {
                     var dataUrl = await FileToDataUrl(skinPath);
-                    await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+                    await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
                 });
             }
             else
@@ -376,7 +377,7 @@ namespace CitrineLauncher
                     var skinPath = account.SkinPath;
                     _ = Task.Run(async () => {
                         var dataUrl = await FileToDataUrl(skinPath);
-                        await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+                        await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
                     });
                 }
             }
