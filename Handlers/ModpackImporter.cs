@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -104,6 +105,11 @@ namespace CitrineLauncher.Handlers
 
         // ── Modrinth ───────────────────────────────────────────────────────────
 
+        private static readonly HttpClient _http = new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } }
+        };
+
         private static async Task<ImportResult> ImportModrinthAsync(
             string sourceFolder, string metaPath, GameInstance target)
         {
@@ -117,18 +123,54 @@ namespace CitrineLauncher.Handlers
                     ? deps.TryGetProperty("minecraft", out var mc) ? mc.GetString() : null
                     : null;
 
+                // Download mods listed in the index
+                var modsDir = Path.Combine(target.InstanceDirectory, "mods");
+                Directory.CreateDirectory(modsDir);
+                if (root.TryGetProperty("files", out var filesEl))
+                {
+                    foreach (var fileEl in filesEl.EnumerateArray())
+                    {
+                        // path relative to instance root (e.g. "mods/sodium-1.21.jar")
+                        var relPath = fileEl.TryGetProperty("path", out var pathEl) ? pathEl.GetString() : null;
+                        if (string.IsNullOrEmpty(relPath)) continue;
+
+                        // Only download mods (skip config files etc that belong in overrides)
+                        if (!relPath.StartsWith("mods/", StringComparison.OrdinalIgnoreCase)) continue;
+
+                        // Pick first download URL
+                        string? downloadUrl = null;
+                        if (fileEl.TryGetProperty("downloads", out var dlEl))
+                            foreach (var u in dlEl.EnumerateArray())
+                            {
+                                downloadUrl = u.GetString();
+                                break;
+                            }
+
+                        if (string.IsNullOrEmpty(downloadUrl)) continue;
+
+                        var destPath = Path.Combine(target.InstanceDirectory, relPath.Replace('/', Path.DirectorySeparatorChar));
+                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+
+                        if (!File.Exists(destPath))
+                        {
+                            var bytes = await _http.GetByteArrayAsync(downloadUrl);
+                            await File.WriteAllBytesAsync(destPath, bytes);
+                        }
+                    }
+                }
+
                 // Copy overrides/ into instance directory
                 var overridesDir = Path.Combine(sourceFolder, "overrides");
                 ImportResult copyResult;
                 if (Directory.Exists(overridesDir))
                     copyResult = await CopyOverridesAsync(overridesDir, target.InstanceDirectory, "Modrinth");
                 else
-                    copyResult = new ImportResult(true, "No overrides folder (mods must be downloaded separately).");
+                    copyResult = new ImportResult(true, "Modrinth pack imported.");
 
                 await WritePackMetaAsync(target, "modrinth", root);
 
                 var msg = copyResult.Success
-                    ? $"Modrinth pack imported. Game version: {gameVersion ?? "unknown"}. Note: mods must be downloaded separately."
+                    ? $"Modrinth pack imported. Game version: {gameVersion ?? "unknown"}."
                     : copyResult.Message;
 
                 return new ImportResult(copyResult.Success, msg, gameVersion);

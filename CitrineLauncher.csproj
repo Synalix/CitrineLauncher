@@ -28,6 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Update="ModrinthBrowseDialog.axaml.cs">
+      <DependentUpon>ModrinthBrowseDialog.axaml</DependentUpon>
+    </Compile>
     <Compile Update="OfflineAccountDialog.axaml.cs">
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
     </Compile>

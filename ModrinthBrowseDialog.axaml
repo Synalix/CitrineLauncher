@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:CitrineLauncher"
+        x:Class="CitrineLauncher.ModrinthBrowseDialog"
+        Title="Browse Modrinth Modpacks"
+        Width="560" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="White"
+        CanResize="False">
+
+    <Grid Margin="20" RowDefinitions="Auto, Auto, *, Auto, Auto">
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Browse Modrinth Modpacks" FontSize="15" FontWeight="Bold"
+                   Foreground="{StaticResource CitrineBrush}" Margin="0,0,0,12"/>
+
+        <!-- Search bar -->
+        <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="0,0,0,10">
+            <TextBox x:Name="SearchBox"
+                     Grid.Column="0"
+                     Watermark="Search modpacks..."
+                     Background="#2A2A2A"
+                     BorderBrush="#333"
+                     Padding="10"
+                     KeyDown="SearchBox_KeyDown"/>
+            <Button x:Name="SearchButton"
+                    Grid.Column="1"
+                    Content="Search"
+                    Width="80" Height="36"
+                    Margin="8,0,0,0"
+                    Background="{StaticResource CitrineBrush}"
+                    Foreground="Black"
+                    FontWeight="Bold"
+                    CornerRadius="6"
+                    Click="SearchButton_Click"/>
+        </Grid>
+
+        <!-- Results list -->
+        <Border Grid.Row="2" Background="#252525" CornerRadius="6" Padding="0">
+            <ListBox x:Name="ResultsList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     SelectionMode="Single"
+                     SelectionChanged="ResultsList_SelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:ModrinthResultItem">
+                        <Grid ColumnDefinitions="42, *" Margin="6,6,6,6" MinHeight="44">
+                            <!-- Icon -->
+                            <Image Grid.Column="0"
+                                   Width="32" Height="32"
+                                   Source="{Binding IconBitmap}"
+                                   VerticalAlignment="Top"
+                                   Stretch="UniformToFill"
+                                   Margin="0,0,10,0"/>
+                            <!-- Text -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Description}"
+                                           FontSize="11"
+                                           Foreground="#AAAAAA"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding DownloadsText}"
+                                           FontSize="10"
+                                           Foreground="#777"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <!-- Status / progress -->
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="3"
+                   Foreground="#AAAAAA"
+                   FontSize="11"
+                   Margin="0,8,0,0"
+                   IsVisible="False"/>
+
+        <!-- Action buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,10,0,0">
+            <Button Content="Cancel" Width="80" Height="32"
+                    Click="CancelButton_Click"
+                    Background="#2A2A2A" Foreground="White" CornerRadius="6"/>
+            <Button x:Name="ImportButton"
+                    Content="Import"
+                    Width="80" Height="32"
+                    IsEnabled="False"
+                    Click="ImportButton_Click"
+                    Background="{StaticResource CitrineBrush}"
+                    Foreground="Black"
+                    FontWeight="Bold"
+                    CornerRadius="6"/>
+        </StackPanel>
+
+    </Grid>
+</Window>
