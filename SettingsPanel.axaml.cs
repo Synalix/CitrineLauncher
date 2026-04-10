@@ -101,9 +101,10 @@ namespace CitrineLauncher
                         {
                             settings.Accounts.Add(new Account { Username = username, Type = "Microsoft" });
                             RefreshAccountList();
-                            settings.Save();
-                            SettingsSaved?.Invoke(this, settings);
                         }
+                        settings.Username = username;
+                        settings.Save();
+                        SettingsSaved?.Invoke(this, settings);
                     }
                 }
                 catch (Exception ex)
