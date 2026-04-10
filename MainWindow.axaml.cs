@@ -138,6 +138,8 @@ namespace CitrineLauncher
 
         private void OpenSettings(string? initialTab = null)
         {
+            if (Handlers.SkinsHandler.IsOpen)
+                Handlers.SkinsHandler.HideSkins(CenterPanel);
             SettingsHandler.ShowSettings(CenterPanel, HandleSettingsSaved, initialTab);
         }
 
