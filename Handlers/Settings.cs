@@ -42,6 +42,7 @@ namespace CitrineLauncher.Handlers
         private bool _particlesEnabled = true;
         private string _minecraftPath = DefaultMinecraftPath;
         private List<Account> _accounts = new List<Account>();
+        private string _lastVersion = string.Empty;
 
         public string Username
         {
@@ -120,6 +121,13 @@ namespace CitrineLauncher.Handlers
                     }
                 }
             }
+        }
+
+        // Last selected version — used once for migration to instance model, then ignored
+        public string LastVersion
+        {
+            get => _lastVersion;
+            set => SetProperty(ref _lastVersion, value);
         }
 
         public List<Account> Accounts

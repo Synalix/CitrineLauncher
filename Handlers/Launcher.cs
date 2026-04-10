@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using CitrineLauncher.Models;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.ProcessBuilder;
@@ -37,53 +38,43 @@ namespace CitrineLauncher
 
         private async void InitializeLauncher()
         {
-            // Bug fix #1: always read from Settings so custom paths work
             var currentLauncher = ConfigureLauncher(Handlers.Settings.Instance.MinecraftPath);
 
-            try
+            // Load instances — this also does migration from LastVersion if needed
+            Handlers.InstanceManager.Instance.Load();
+
+            Dispatcher.UIThread.Post(() =>
             {
-                var versions = await currentLauncher.GetAllVersionsAsync();
-
-                Dispatcher.UIThread.Post(() =>
-                {
-                    cbVersions.Items.Clear();
-                    foreach (var v in versions)
-                    {
-                        if (v.Type == "release" && !string.IsNullOrEmpty(v.Name))
-                        {
-                            cbVersions.Items.Add(v.Name);
-                        }
-                    }
-
-                    if (cbVersions.Items.Count > 0)
-                        cbVersions.SelectedIndex = 0;
-                });
-            }
-            catch (Exception ex)
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    lblStatus.Text = "Error loading versions";
-                });
-
-                Debug.WriteLine($"Launcher Error: {ex.Message}");
-            }
+                RefreshInstanceList();
+            });
         }
 
         private async void BtnLaunch_Click(object? sender, RoutedEventArgs e)
         {
             string username = Handlers.Settings.Instance.Username;
 
-            if (string.IsNullOrEmpty(username) || cbVersions.SelectedItem == null) return;
-            string selectedVersion = cbVersions.SelectedItem.ToString()!;
+            if (string.IsNullOrEmpty(username) || cbInstances.SelectedItem is not GameInstance instance) return;
             btnLaunch.IsEnabled = false;
 
             try
             {
                 var settings = Handlers.Settings.Instance;
 
-                // Bug fix: removed redundant Task.Run wrapper - InstallAsync is already async
-                await launcher!.InstallAsync(selectedVersion);
+                // Save last-used version for future migration fallback
+                settings.LastVersion = instance.GameVersion;
+
+                // If Fabric: install the Fabric profile JSON before CmlLib's InstallAsync
+                if (instance.Loader == LoaderType.Fabric)
+                {
+                    lblStatus.Text = "Installing Fabric...";
+                    await Handlers.InstanceManager.InstallFabricAsync(
+                        instance.GameVersion,
+                        instance.LoaderVersion,
+                        settings.MinecraftPath);
+                }
+
+                lblStatus.Text = "Installing game files...";
+                await launcher!.InstallAsync(instance.ResolvedVersion);
 
                 var account = settings.Accounts.FirstOrDefault(a =>
                     string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
@@ -98,13 +89,18 @@ namespace CitrineLauncher
                 {
                     Session = session,
                     MaximumRamMb = settings.MaxRam,
-                    // Bug fix #10: MinRam was saved but never used
-                    MinimumRamMb = settings.MinRam
+                    MinimumRamMb = settings.MinRam,
+                    GameLauncherName = "CitrineLauncher",
+                    // Per-instance game directory: mods/configs stay isolated per instance
+                    ExtraGameArguments = new CmlLib.Core.ProcessBuilder.MArgument[]
+                    {
+                        new("--gameDir"),
+                        new(instance.InstanceDirectory)
+                    }
                 };
 
-                var process = await launcher!.BuildProcessAsync(selectedVersion, launchOptions);
+                var process = await launcher!.BuildProcessAsync(instance.ResolvedVersion, launchOptions);
 
-                // Bug fix #11: apply ShowConsole setting
                 if (!settings.ShowConsole)
                 {
                     process.StartInfo.CreateNoWindow = true;
@@ -117,11 +113,8 @@ namespace CitrineLauncher
                 process.Start();
                 lblStatus.Text = "Game Running...";
 
-                // Bug fix #23: was called AutoCloseLauncher but actually minimized
                 if (settings.MinimizeOnLaunch)
-                {
                     WindowState = Avalonia.Controls.WindowState.Minimized;
-                }
             }
             catch (Exception ex)
             {
@@ -133,12 +126,10 @@ namespace CitrineLauncher
 
         private void GameProcess_Exited(object? sender, EventArgs e)
         {
-            // Bug fix #3: check window is still alive before posting to UI
             if (!IsLoaded) return;
 
             Dispatcher.UIThread.Post(() =>
             {
-                // Double-check after the post as well
                 if (!IsLoaded) return;
                 lblStatus.Text = "Ready to Play";
                 btnLaunch.IsEnabled = true;
