@@ -10,7 +10,7 @@
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <InformationalVersion>1.2.1</InformationalVersion>
+    <InformationalVersion>1.2.2</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +30,12 @@
   <ItemGroup>
     <Compile Update="OfflineAccountDialog.axaml.cs">
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="NewInstanceDialog.axaml.cs">
+      <DependentUpon>NewInstanceDialog.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="ConfirmDialog.axaml.cs">
+      <DependentUpon>ConfirmDialog.axaml</DependentUpon>
     </Compile>
     <Compile Update="SkinsPanel.axaml.cs">
       <DependentUpon>SkinsPanel.axaml</DependentUpon>

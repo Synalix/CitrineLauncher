@@ -1,0 +1,79 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CitrineLauncher.NewInstanceDialog"
+        Title="New Instance"
+        Width="420" Height="360"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="White"
+        CanResize="False">
+
+    <Grid Margin="20" RowDefinitions="Auto, *, Auto">
+        <TextBlock Text="Create New Instance" FontSize="15" FontWeight="Bold"
+                   Foreground="{StaticResource CitrineBrush}"/>
+
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="10">
+            <TextBox x:Name="NameInput"
+                     Watermark="Instance name"
+                     Background="#2A2A2A"
+                     BorderBrush="#333"
+                     Padding="10"/>
+
+            <ComboBox x:Name="VersionCombo"
+                      PlaceholderText="Select Minecraft version"
+                      Background="#2A2A2A"
+                      BorderThickness="0"
+                      HorizontalAlignment="Stretch"
+                      Padding="10,8"/>
+
+            <ComboBox x:Name="LoaderCombo"
+                      PlaceholderText="Loader"
+                      Background="#2A2A2A"
+                      BorderThickness="0"
+                      HorizontalAlignment="Stretch"
+                      Padding="10,8"/>
+
+            <!-- Modpack import row -->
+            <Grid ColumnDefinitions="*, Auto">
+                <TextBox x:Name="ModpackPathBox"
+                         Grid.Column="0"
+                         Watermark="Import modpack (optional .zip)"
+                         Background="#2A2A2A"
+                         BorderBrush="#333"
+                         IsReadOnly="True"
+                         Padding="10"/>
+                <Button x:Name="BrowseModpackButton"
+                        Grid.Column="1"
+                        Content="Browse"
+                        Width="72" Height="36"
+                        Margin="6,0,0,0"
+                        Background="#2A2A2A"
+                        Foreground="White"
+                        CornerRadius="6"
+                        Click="BrowseModpackButton_Click"/>
+            </Grid>
+
+            <TextBlock x:Name="StatusText"
+                       Foreground="#AAAAAA"
+                       FontSize="11"
+                       IsVisible="False"/>
+
+            <TextBlock x:Name="ErrorText"
+                       Foreground="#FF6B6B"
+                       FontSize="11"
+                       IsVisible="False"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" Width="80" Height="32"
+                    Click="CancelButton_Click" Background="#2A2A2A" Foreground="White"
+                    CornerRadius="6"/>
+            <Button x:Name="CreateButton" Content="Create" Width="80" Height="32"
+                    Click="CreateButton_Click"
+                    Background="{StaticResource CitrineBrush}"
+                    Foreground="Black"
+                    FontWeight="Bold"
+                    CornerRadius="6"/>
+        </StackPanel>
+    </Grid>
+</Window>
