@@ -19,6 +19,7 @@ namespace CitrineLauncher
         private CancellationTokenSource _cts = new();
         private Account? _activeAccount;
         private MinecraftProfile? _currentProfile;
+        private string? _cachedProfileUsername;
         private MinecraftCape? _activeCape;
         private bool _capeEnabled;
         private string _currentModel = "classic";
@@ -141,33 +142,44 @@ namespace CitrineLauncher
             ClearErrors();
             try
             {
-                var session = await MicrosoftAuth.GetSessionAsync();
-                if (ct.IsCancellationRequested) return;
-                _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
-                if (ct.IsCancellationRequested) return;
+                // Reuse cached profile if we already loaded it for this account
+                if (_currentProfile == null || _cachedProfileUsername != account.Username)
+                {
+                    var session = await MicrosoftAuth.GetSessionAsync();
+                    if (ct.IsCancellationRequested) return;
+                    _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
+                    if (ct.IsCancellationRequested) return;
+                    _cachedProfileUsername = account.Username;
+                }
 
+                // Derive all state before touching the UI
                 var activeSkin = _currentProfile.Skins.FirstOrDefault(s => s.State == "ACTIVE");
-                _activeCape  = _currentProfile.Capes.FirstOrDefault(c => c.State == "ACTIVE");
-                _capeEnabled = _activeCape != null;
-
-                SkinNameLabel.Text = activeSkin != null ? "Current skin" : "Default skin";
+                var activeCape = _currentProfile.Capes.FirstOrDefault(c => c.State == "ACTIVE");
+                var capeEnabled = activeCape != null;
                 var model = activeSkin?.Variant?.ToLower() == "slim" ? "slim" : "classic";
-                _currentModel = model;
-                SetModelButtons(model);
 
-                if (activeSkin != null && _webViewReady)
-                    await ExecuteViewerScript($"setSkin('{activeSkin.Url}', '{model}')");
+                // Apply all UI updates at once
+                _activeCape   = activeCape;
+                _capeEnabled  = capeEnabled;
+                _currentModel = model;
+
+                SkinNameLabel.Text    = activeSkin != null ? "Current skin" : "Default skin";
+                ToggleCapeBtn.Content = capeEnabled ? "DISABLE CAPE" : "ENABLE CAPE";
+                SetModelButtons(model);
 
                 CapesList.SelectionChanged -= CapesList_SelectionChanged;
                 CapesList.ItemsSource = _currentProfile.Capes.ToArray();
-                if (_activeCape != null)
-                    CapesList.SelectedItem = _currentProfile.Capes.FirstOrDefault(c => c.Id == _activeCape.Id);
+                if (activeCape != null)
+                    CapesList.SelectedItem = _currentProfile.Capes.FirstOrDefault(c => c.Id == activeCape.Id);
                 CapesList.SelectionChanged += CapesList_SelectionChanged;
 
-                ToggleCapeBtn.Content = _capeEnabled ? "DISABLE CAPE" : "ENABLE CAPE";
-                if (_activeCape != null && _webViewReady)
-                    await ExecuteViewerScript($"setCape('{_activeCape.Url}')");
-                else if (_webViewReady)
+                if (!_webViewReady) return;
+
+                if (activeSkin != null)
+                    await ExecuteViewerScript($"setSkin('{activeSkin.Url}', '{model}')");
+                if (activeCape != null)
+                    await ExecuteViewerScript($"setCape('{activeCape.Url}')");
+                else
                     await ExecuteViewerScript("clearCape()");
             }
             catch (OperationCanceledException) { }
@@ -179,6 +191,12 @@ namespace CitrineLauncher
             {
                 if (!ct.IsCancellationRequested) SetLoading(false);
             }
+        }
+
+        private void InvalidateProfileCache()
+        {
+            _currentProfile = null;
+            _cachedProfileUsername = null;
         }
 
         private void LoadOfflineAccount(Account account)
@@ -253,6 +271,7 @@ namespace CitrineLauncher
                 {
                     var session = await MicrosoftAuth.GetSessionAsync();
                     await SkinApiHandler.UploadSkinAsync(session.AccessToken, filePath, _currentModel);
+                    InvalidateProfileCache();
                     SkinNameLabel.Text = "Current skin";
                 }
                 else
@@ -322,6 +341,7 @@ namespace CitrineLauncher
                 if (_capeEnabled)
                 {
                     await SkinApiHandler.DisableCapeAsync(session.AccessToken);
+                    InvalidateProfileCache();
                     _capeEnabled = false;
                     _activeCape  = null;
                     ToggleCapeBtn.Content = "ENABLE CAPE";
@@ -332,6 +352,7 @@ namespace CitrineLauncher
                     var target = CapesList.SelectedItem as MinecraftCape ?? _currentProfile?.Capes.FirstOrDefault();
                     if (target == null) return;
                     await SkinApiHandler.SetActiveCapeAsync(session.AccessToken, target.Id);
+                    InvalidateProfileCache();
                     _activeCape  = target;
                     _capeEnabled = true;
                     ToggleCapeBtn.Content = "DISABLE CAPE";
@@ -357,6 +378,7 @@ namespace CitrineLauncher
             {
                 var session = await MicrosoftAuth.GetSessionAsync();
                 await SkinApiHandler.SetActiveCapeAsync(session.AccessToken, cape.Id);
+                InvalidateProfileCache();
                 _activeCape = cape;
                 await ExecuteViewerScript($"setCape('{cape.Url}')");
             }
