@@ -33,7 +33,7 @@ namespace CitrineLauncher
                 e.Handled = true;
             };
 
-            // 1. Load versions
+            // 1. Load instances + versions
             InitializeLauncher();
 
             // 2. Setup account list
@@ -46,12 +46,20 @@ namespace CitrineLauncher
             btnUpdate.Click += BtnUpdate_Click;
             btnSkins.Click += BtnSkins_Click;
             addAccountButton.Click += AddAccountButton_Click;
+            btnNewInstance.Click += BtnNewInstance_Click;
+            btnDeleteInstance.Click += BtnDeleteInstance_Click;
 
             accountCombo.SelectionChanged += (s, e) =>
             {
                 UpdateLaunchButtonState();
                 UpdateTitleText();
                 SaveSelectedUsername();
+            };
+
+            cbInstances.SelectionChanged += (s, e) =>
+            {
+                UpdateLaunchButtonState();
+                btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null;
             };
 
             // 4. Window controls
@@ -81,6 +89,43 @@ namespace CitrineLauncher
                 if (currentGameProcess != null)
                     currentGameProcess.Exited -= GameProcess_Exited;
             };
+        }
+
+        internal void RefreshInstanceList()
+        {
+            var instances = Handlers.InstanceManager.Instance.Instances;
+            cbInstances.ItemsSource = null;
+            cbInstances.ItemsSource = instances;
+            if (instances.Count > 0)
+                cbInstances.SelectedIndex = 0;
+            UpdateLaunchButtonState();
+            btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null;
+        }
+
+        private async void BtnNewInstance_Click(object? sender, RoutedEventArgs e)
+        {
+            var dialog = new NewInstanceDialog(launcher!);
+            var result = await dialog.ShowDialog<CitrineLauncher.Models.GameInstance?>(this);
+            if (result != null)
+            {
+                RefreshInstanceList();
+                cbInstances.SelectedItem = result;
+            }
+        }
+
+        private async void BtnDeleteInstance_Click(object? sender, RoutedEventArgs e)
+        {
+            if (cbInstances.SelectedItem is not CitrineLauncher.Models.GameInstance instance) return;
+
+            var dialog = new ConfirmDialog($"Delete \"{instance.Name}\"?",
+                "This will permanently delete the instance folder and all its contents.");
+            var confirmed = await dialog.ShowDialog<bool>(this);
+
+            if (confirmed)
+            {
+                Handlers.InstanceManager.Instance.DeleteInstance(instance);
+                RefreshInstanceList();
+            }
         }
 
         private void RefreshAccountList()
@@ -119,7 +164,7 @@ namespace CitrineLauncher
 
         private void UpdateLaunchButtonState()
         {
-            btnLaunch.IsEnabled = accountCombo.SelectedItem != null;
+            btnLaunch.IsEnabled = accountCombo.SelectedItem != null && cbInstances.SelectedItem != null;
         }
 
         private void UpdateTitleText()

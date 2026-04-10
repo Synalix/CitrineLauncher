@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CitrineLauncher.ConfirmDialog"
+        Title="Confirm"
+        Width="360" Height="160"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="White"
+        CanResize="False">
+
+    <Grid Margin="24,20" RowDefinitions="Auto, *, Auto">
+        <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold"
+                   Foreground="#FF6B6B" Margin="0,0,0,8"/>
+
+        <TextBlock x:Name="BodyText" Grid.Row="1"
+                   FontSize="12" Foreground="#CCCCCC"
+                   TextWrapping="Wrap" VerticalAlignment="Top"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="8">
+            <Button x:Name="CancelButton" Content="Cancel" Width="80" Height="32"
+                    Background="#2A2A2A" Foreground="White" CornerRadius="6"
+                    Click="CancelButton_Click"/>
+            <Button x:Name="ConfirmButton" Content="Delete" Width="80" Height="32"
+                    Background="#C42B1C" Foreground="White" FontWeight="Bold"
+                    CornerRadius="6" Click="ConfirmButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

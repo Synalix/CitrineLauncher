@@ -144,7 +144,31 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="15" Margin="0,0,30,0">
-                    <ComboBox x:Name="cbVersions" Width="140" VerticalAlignment="Center" CornerRadius="5"/>
+                    <ComboBox x:Name="cbInstances" Width="160" VerticalAlignment="Center" CornerRadius="5"
+                              PlaceholderText="Select instance"
+                              Background="#252525"
+                              BorderThickness="0"/>
+
+                    <Button x:Name="btnNewInstance"
+                            Content="+"
+                            Width="30" Height="30"
+                            Background="#252525"
+                            Foreground="White"
+                            FontWeight="Bold"
+                            CornerRadius="5"
+                            ToolTip.Tip="New instance"/>
+
+                    <Button x:Name="btnDeleteInstance"
+                            Width="30" Height="30"
+                            Background="#252525"
+                            Foreground="#FF6B6B"
+                            FontWeight="Bold"
+                            CornerRadius="5"
+                            IsEnabled="False"
+                            ToolTip.Tip="Delete instance">
+                        <Path Data="M6,19 C6,20.1 6.9,21 8,21 L16,21 C17.1,21 18,20.1 18,19 L18,7 L6,7 Z M19,4 L15.5,4 L14.5,3 L9.5,3 L8.5,4 L5,4 L5,6 L19,6 Z"
+                              Fill="#FF6B6B" Stretch="Uniform" Width="14" Height="14"/>
+                    </Button>
 
                     <ComboBox x:Name="accountCombo"
                               Width="140"
