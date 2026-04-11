@@ -70,7 +70,7 @@ namespace CitrineLauncher.Handlers
 
             using var form = new MultipartFormDataContent();
             form.Add(fileContent, "file", Path.GetFileName(filePath));
-            form.Add(new StringContent(model.ToLower()), "variant");
+            form.Add(new StringContent(model.ToLowerInvariant()), "variant");
 
             using var req = AuthRequest(HttpMethod.Post, SkinsUrl, accessToken);
             req.Content = form;
