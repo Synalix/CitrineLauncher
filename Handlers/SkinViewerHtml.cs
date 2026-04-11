@@ -19,6 +19,11 @@ namespace CitrineLauncher.Handlers
             return reader.ReadToEnd();
         }
 
+        // Default Steve skin — 64×64 RGBA PNG with correct Minecraft UV layout,
+        // embedded as a base64 data URL so the fallback works without network access.
+        private const string SteveSkinDataUrl =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA60lEQVR42u3ZMQrCMBSA4ZzBK7iIoyCiuLmLq97ApXMP0UO4uXoKr/XEIZAUTFqToi/5f3hDaVPSb+gSYyJd9gsJjSk9AAAAAAAAACgYwH7I89Z6E/vw/ny7HgANAP17Q54Zul4FgM3es1UFsD7fPYD3dRUAnzYfew6AUn6CxQPsjp24M3Z9DCh1f7nfBwAAAOQFOFwfEprU/eV+HwAAAOC33DbiDgAAAFAXwGY+E3fGrl+dOgnNr/cHAAAAEBERERERERGZvz5cBQAAAOoCmPzgAwAAAJi03IerAAAAgK5SDy/VH34CAIBugBdVOAQjOMARKAAAAABJRU5ErkJggg==";
+
         public static string Build() => $$"""
             <!DOCTYPE html>
             <html>
@@ -35,6 +40,7 @@ namespace CitrineLauncher.Handlers
             <canvas id="skin_canvas"></canvas>
             <script>{{_js.Value}}</script>
             <script>
+              var STEVE_SKIN = "{{SteveSkinDataUrl}}";
               var viewer = new skinview3d.SkinViewer({
                 canvas: document.getElementById("skin_canvas"),
                 width: window.innerWidth,
@@ -51,7 +57,7 @@ namespace CitrineLauncher.Handlers
               function setCape(url) { viewer.loadCape(url); }
               function clearCape() { viewer.loadCape(null); }
               function loadDefault() {
-                viewer.loadSkin(null);
+                viewer.loadSkin(STEVE_SKIN, { model: "default" });
               }
             </script>
             </body>
