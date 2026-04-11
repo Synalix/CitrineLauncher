@@ -51,9 +51,7 @@ namespace CitrineLauncher.Handlers
               function setCape(url) { viewer.loadCape(url); }
               function clearCape() { viewer.loadCape(null); }
               function loadDefault() {
-                viewer.loadSkin(
-                  "https://crafatar.com/skins/8667ba71b85a4004af54457a9734eed7"
-                );
+                viewer.loadSkin(null);
               }
             </script>
             </body>
