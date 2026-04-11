@@ -458,6 +458,36 @@ namespace CitrineLauncher
                 return "Invalid file — must be a PNG image.";
             if (new FileInfo(path).Length > 1_000_000)
                 return "File too large — skin PNG must be under 1MB.";
+
+            // Verify PNG signature and image dimensions
+            try
+            {
+                using var fs = File.OpenRead(path);
+
+                // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+                Span<byte> sig = stackalloc byte[8];
+                if (fs.Read(sig) < 8 ||
+                    sig[0] != 0x89 || sig[1] != 0x50 || sig[2] != 0x4E || sig[3] != 0x47 ||
+                    sig[4] != 0x0D || sig[5] != 0x0A || sig[6] != 0x1A || sig[7] != 0x0A)
+                    return "Invalid file — not a valid PNG image.";
+
+                // IHDR chunk: 4 bytes length, 4 bytes "IHDR", 4 bytes width, 4 bytes height
+                Span<byte> ihdr = stackalloc byte[16];
+                if (fs.Read(ihdr) < 16)
+                    return "Invalid file — PNG header is truncated.";
+
+                int width  = (ihdr[8]  << 24) | (ihdr[9]  << 16) | (ihdr[10] << 8) | ihdr[11];
+                int height = (ihdr[12] << 24) | (ihdr[13] << 16) | (ihdr[14] << 8) | ihdr[15];
+
+                bool validDimensions = (width == 64 && height == 64) || (width == 64 && height == 32);
+                if (!validDimensions)
+                    return $"Invalid skin dimensions ({width}x{height}) — must be 64x64 or 64x32.";
+            }
+            catch (Exception ex)
+            {
+                return $"Could not read file: {ex.Message}";
+            }
+
             return null;
         }
 
