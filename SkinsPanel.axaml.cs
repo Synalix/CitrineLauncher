@@ -19,7 +19,7 @@ namespace CitrineLauncher
         private CancellationTokenSource _cts = new();
         private Account? _activeAccount;
         private MinecraftProfile? _currentProfile;
-        private string? _cachedProfileUsername;
+        private string? _cachedProfileKey; // "username|type"
         private MinecraftCape? _activeCape;
         private bool _capeEnabled;
         private string _currentModel = "classic";
@@ -143,14 +143,15 @@ namespace CitrineLauncher
             ClearErrors();
             try
             {
-                // Reuse cached profile if we already loaded it for this account
-                if (_currentProfile == null || _cachedProfileUsername != account.Username)
+                // Reuse cached profile only if username AND type match
+                var profileKey = $"{account.Username}|{account.Type}";
+                if (_currentProfile == null || _cachedProfileKey != profileKey)
                 {
                     var session = await MicrosoftAuth.GetSessionAsync();
                     if (ct.IsCancellationRequested) return;
                     _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
                     if (ct.IsCancellationRequested) return;
-                    _cachedProfileUsername = account.Username;
+                    _cachedProfileKey = profileKey;
                 }
 
                 // Derive all state before touching the UI
@@ -199,7 +200,7 @@ namespace CitrineLauncher
         private void InvalidateProfileCache()
         {
             _currentProfile = null;
-            _cachedProfileUsername = null;
+            _cachedProfileKey = null;
         }
 
         private void LoadOfflineAccount(Account account)
@@ -207,7 +208,9 @@ namespace CitrineLauncher
             ClearErrors();
             _currentProfile = null;
             _activeCape = null;
+            _capeEnabled = false;
             CapesList.ItemsSource = null;
+            if (_webViewReady) _ = ExecuteViewerScript("clearCape()");
 
             if (string.IsNullOrEmpty(account.SkinPath))
             {
