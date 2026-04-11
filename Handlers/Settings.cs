@@ -15,6 +15,16 @@ namespace CitrineLauncher.Handlers
         public string Type { get; set; } = "Offline"; // "Offline" or "Microsoft"
         public string SkinPath { get; set; } = string.Empty;  // offline only: local PNG path
         public string SkinModel { get; set; } = "classic";    // "classic" or "slim"
+        // Stable UUID for offline accounts — generated once and persisted so the skin server
+        // always returns the same profile for this account regardless of username changes.
+        public string OfflineUuid { get; set; } = string.Empty;
+
+        public string GetOrCreateOfflineUuid()
+        {
+            if (string.IsNullOrEmpty(OfflineUuid))
+                OfflineUuid = Guid.NewGuid().ToString("N"); // 32-char hex, no dashes
+            return OfflineUuid;
+        }
     }
 
     public class Settings : INotifyPropertyChanged

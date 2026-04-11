@@ -88,6 +88,7 @@ namespace CitrineLauncher
                 // Unsubscribe game process event so it doesn't post to a dead window
                 if (currentGameProcess != null)
                     currentGameProcess.Exited -= GameProcess_Exited;
+                Handlers.OfflineSkinServer.Shared.Dispose();
             };
         }
 

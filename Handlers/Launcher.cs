@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using CitrineLauncher.Handlers;
 using CitrineLauncher.Models;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
@@ -8,6 +9,7 @@ using CmlLib.Core.ProcessBuilder;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -83,7 +85,33 @@ namespace CitrineLauncher
                 if (account?.Type == "Microsoft")
                     session = await Handlers.MicrosoftAuth.GetSessionAsync();
                 else
-                    session = MSession.CreateOfflineSession(username);
+                {
+                    // Use the account's stable UUID so the skin server can identify it
+                    var offlineUuid = account?.GetOrCreateOfflineUuid() ?? Guid.NewGuid().ToString("N");
+                    settings.Save();
+                    session = new MSession(username, "access_token", offlineUuid)
+                    {
+                        UserType = "msa"
+                    };
+                }
+
+                // Build extra JVM args — inject authlib-injector for offline accounts with a skin
+                var extraJvmArgs = new System.Collections.Generic.List<MArgument>();
+                if (account?.Type == "Offline" && !string.IsNullOrEmpty(account.SkinPath) && File.Exists(account.SkinPath))
+                {
+                    try
+                    {
+                        lblStatus.Text = "Downloading skin agent...";
+                        await OfflineSkinServer.EnsureJarAsync();
+                        OfflineSkinServer.Shared.Register(account);
+                        var agentArg = $"-javaagent:{OfflineSkinServer.JarPath}={OfflineSkinServer.Shared.BaseUrl}";
+                        extraJvmArgs.Add(new MArgument(agentArg));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Skin agent setup failed (continuing without it): {ex.Message}");
+                    }
+                }
 
                 var launchOptions = new MLaunchOption
                 {
@@ -91,6 +119,7 @@ namespace CitrineLauncher
                     MaximumRamMb = settings.MaxRam,
                     MinimumRamMb = settings.MinRam,
                     GameLauncherName = "CitrineLauncher",
+                    ExtraJvmArguments = extraJvmArgs.Count > 0 ? extraJvmArgs : Enumerable.Empty<MArgument>(),
                     // Per-instance game directory: mods/configs stay isolated per instance
                     ExtraGameArguments = new CmlLib.Core.ProcessBuilder.MArgument[]
                     {
