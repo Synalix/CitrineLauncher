@@ -7,7 +7,7 @@ It is meant to stay light and easy to use:
 - launch Minecraft from a clean custom UI
 - add offline or Microsoft accounts
 - switch versions and manage multiple instances
-- import CurseForge and Modrinth modpacks
+- import Modrinth modpacks
 - choose a Minecraft folder
 - change basic launcher settings
 - keep the look simple and readable
