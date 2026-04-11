@@ -48,13 +48,44 @@ namespace CitrineLauncher
             MinRamTextBox.LostFocus += (s, e) =>
             {
                 if (int.TryParse(MinRamTextBox.Text, out int val) && val >= 256)
+                {
                     settings.MinRam = val;
+                    // Clamp MaxRam so it stays >= MinRam
+                    if (settings.MaxRam < val)
+                    {
+                        settings.MaxRam = val;
+                        MaxRamTextBox.Text = val.ToString();
+                    }
+                    RamErrorLabel.IsVisible = false;
+                }
+                else
+                {
+                    RamErrorLabel.Text = "Minimum RAM must be a number ≥ 256 MB.";
+                    RamErrorLabel.IsVisible = true;
+                    MinRamTextBox.Text = settings.MinRam.ToString();
+                }
             };
 
             MaxRamTextBox.LostFocus += (s, e) =>
             {
                 if (int.TryParse(MaxRamTextBox.Text, out int val) && val >= 256)
+                {
+                    if (val < settings.MinRam)
+                    {
+                        RamErrorLabel.Text = $"Maximum RAM must be ≥ minimum RAM ({settings.MinRam} MB).";
+                        RamErrorLabel.IsVisible = true;
+                        MaxRamTextBox.Text = settings.MaxRam.ToString();
+                        return;
+                    }
                     settings.MaxRam = val;
+                    RamErrorLabel.IsVisible = false;
+                }
+                else
+                {
+                    RamErrorLabel.Text = "Maximum RAM must be a number ≥ 256 MB.";
+                    RamErrorLabel.IsVisible = true;
+                    MaxRamTextBox.Text = settings.MaxRam.ToString();
+                }
             };
 
             // Show folder path (read-only display - not a TwoWay binding to avoid writing on every keystroke, bug #7)
@@ -121,18 +152,29 @@ namespace CitrineLauncher
             {
                 if (!_isEditingFolder)
                 {
+                    FolderErrorLabel.IsVisible = false;
                     SetFolderEditMode(true);
                     FolderPathTextBox.Text = settings.MinecraftPath;
                     FolderPathTextBox.Focus();
                 }
                 else
                 {
-                    var newPath = FolderPathTextBox.Text ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(newPath))
+                    var newPath = FolderPathTextBox.Text?.Trim() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(newPath))
                     {
-                        settings.MinecraftPath = newPath;
-                        FolderPathTextBlock.Text = newPath;
+                        FolderErrorLabel.Text = "Path cannot be empty.";
+                        FolderErrorLabel.IsVisible = true;
+                        return;
                     }
+                    if (!System.IO.Path.IsPathRooted(newPath))
+                    {
+                        FolderErrorLabel.Text = "Path must be an absolute path (e.g. C:\\Games\\Minecraft).";
+                        FolderErrorLabel.IsVisible = true;
+                        return;
+                    }
+                    FolderErrorLabel.IsVisible = false;
+                    settings.MinecraftPath = newPath;
+                    FolderPathTextBlock.Text = newPath;
                     SetFolderEditMode(false);
                 }
             };

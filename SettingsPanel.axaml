@@ -238,6 +238,9 @@
                                              Watermark="e.g. 2048"/>
                                 </StackPanel>
 
+                                <TextBlock x:Name="RamErrorLabel" IsVisible="False"
+                                           Foreground="#FF6B6B" FontSize="12" TextWrapping="Wrap"/>
+
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -336,6 +339,8 @@
                                          Watermark="Enter path..."/>
                                 <Button x:Name="ChangeFolderButton" Classes="secondary"
                                         Content="CHANGE" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="FolderErrorLabel" IsVisible="False"
+                                           Foreground="#FF6B6B" FontSize="12" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
