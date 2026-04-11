@@ -5,8 +5,9 @@ A simple Minecraft launcher built with Avalonia UI and CmlLib.Core.
 It is meant to stay light and easy to use:
 
 - launch Minecraft from a clean custom UI
-- add offline accounts
-- switch versions
+- add offline or Microsoft accounts
+- switch versions and manage multiple instances
+- import CurseForge and Modrinth modpacks
 - choose a Minecraft folder
 - change basic launcher settings
 - keep the look simple and readable
@@ -44,7 +45,8 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ## Notes
 
 - Settings are saved in `%AppData%\CitrineLauncher`
-- The launcher is made for offline accounts right now
+- Both offline and Microsoft accounts are supported. Microsoft login uses the standard OAuth device-code flow via CmlLib.
+- Fabric loader and modpack import (CurseForge/Modrinth) are supported. Vanilla instances use per-instance game directories.
 
 ## License
 
