@@ -43,17 +43,18 @@ namespace CitrineLauncher.Handlers
 
         private static readonly HttpClient _http = new();
 
-        private static void ApplyAuth(string accessToken)
+        private static HttpRequestMessage AuthRequest(HttpMethod method, string url, string accessToken)
         {
-            _http.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", accessToken);
+            var req = new HttpRequestMessage(method, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            return req;
         }
 
         public static async Task<MinecraftProfile> GetProfileAsync(
             string accessToken, CancellationToken ct = default)
         {
-            ApplyAuth(accessToken);
-            var response = await _http.GetAsync(ProfileUrl, ct);
+            using var req = AuthRequest(HttpMethod.Get, ProfileUrl, accessToken);
+            var response = await _http.SendAsync(req, ct);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(ct);
             return JsonSerializer.Deserialize<MinecraftProfile>(json)
@@ -63,14 +64,17 @@ namespace CitrineLauncher.Handlers
         public static async Task UploadSkinAsync(
             string accessToken, string filePath, string model, CancellationToken ct = default)
         {
-            ApplyAuth(accessToken);
-            using var form = new MultipartFormDataContent();
             var fileBytes = await File.ReadAllBytesAsync(filePath, ct);
             var fileContent = new ByteArrayContent(fileBytes);
             fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+
+            using var form = new MultipartFormDataContent();
             form.Add(fileContent, "file", Path.GetFileName(filePath));
-            form.Add(new StringContent(model.ToUpper()), "variant");
-            var response = await _http.PostAsync(SkinsUrl, form, ct);
+            form.Add(new StringContent(model.ToLower()), "variant");
+
+            using var req = AuthRequest(HttpMethod.Post, SkinsUrl, accessToken);
+            req.Content = form;
+            var response = await _http.SendAsync(req, ct);
             response.EnsureSuccessStatusCode();
         }
 
@@ -83,18 +87,18 @@ namespace CitrineLauncher.Handlers
         public static async Task SetActiveCapeAsync(
             string accessToken, string capeId, CancellationToken ct = default)
         {
-            ApplyAuth(accessToken);
             var body = JsonSerializer.Serialize(new { capeId });
-            var content = new StringContent(body, Encoding.UTF8, "application/json");
-            var response = await _http.PutAsync(CapesUrl, content, ct);
+            using var req = AuthRequest(HttpMethod.Put, CapesUrl, accessToken);
+            req.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            var response = await _http.SendAsync(req, ct);
             response.EnsureSuccessStatusCode();
         }
 
         public static async Task DisableCapeAsync(
             string accessToken, CancellationToken ct = default)
         {
-            ApplyAuth(accessToken);
-            var response = await _http.DeleteAsync(CapesUrl, ct);
+            using var req = AuthRequest(HttpMethod.Delete, CapesUrl, accessToken);
+            var response = await _http.SendAsync(req, ct);
             response.EnsureSuccessStatusCode();
         }
     }

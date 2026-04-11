@@ -159,6 +159,8 @@ namespace CitrineLauncher
             if (e.PropertyName == nameof(Settings.MinecraftPath))
             {
                 ConfigureLauncher(Settings.Instance.MinecraftPath);
+                Handlers.InstanceManager.Instance.Load();
+                RefreshInstanceList();
             }
         }
 
@@ -224,6 +226,9 @@ namespace CitrineLauncher
                 Handlers.SkinsHandler.HideSkins(CenterPanel);
                 return;
             }
+
+            if (SettingsHandler.IsOpen)
+                SettingsHandler.CloseSettings(CenterPanel);
 
             Handlers.SkinsHandler.ShowSkins(CenterPanel);
         }

@@ -45,24 +45,47 @@ namespace CitrineLauncher.Handlers
 
         /// <summary>
         /// Import from an already-extracted folder. Detects pack format and copies files.
+        /// Searches root and one level deep to handle packs wrapped in a single top-level folder.
         /// </summary>
         public static async Task<ImportResult> ImportFromFolderAsync(string sourceFolder, GameInstance target)
         {
             if (!Directory.Exists(sourceFolder))
                 return new ImportResult(false, $"Folder not found: {sourceFolder}");
 
+            var packRoot = FindPackRoot(sourceFolder);
+
             // Try CurseForge format first
-            var curseForgeMeta = Path.Combine(sourceFolder, "manifest.json");
+            var curseForgeMeta = Path.Combine(packRoot, "manifest.json");
             if (File.Exists(curseForgeMeta))
-                return await ImportCurseForgeAsync(sourceFolder, curseForgeMeta, target);
+                return await ImportCurseForgeAsync(packRoot, curseForgeMeta, target);
 
             // Try Modrinth format
-            var modrinthMeta = Path.Combine(sourceFolder, "modrinth.index.json");
+            var modrinthMeta = Path.Combine(packRoot, "modrinth.index.json");
             if (File.Exists(modrinthMeta))
-                return await ImportModrinthAsync(sourceFolder, modrinthMeta, target);
+                return await ImportModrinthAsync(packRoot, modrinthMeta, target);
 
             // Unknown format — copy everything as-is
-            return await CopyOverridesAsync(sourceFolder, target.InstanceDirectory, "unknown");
+            return await CopyOverridesAsync(packRoot, target.InstanceDirectory, "unknown");
+        }
+
+        /// <summary>
+        /// Returns the folder that directly contains a known manifest file,
+        /// checking the root and one subfolder deep.
+        /// </summary>
+        private static string FindPackRoot(string sourceFolder)
+        {
+            if (File.Exists(Path.Combine(sourceFolder, "manifest.json")) ||
+                File.Exists(Path.Combine(sourceFolder, "modrinth.index.json")))
+                return sourceFolder;
+
+            foreach (var sub in Directory.GetDirectories(sourceFolder))
+            {
+                if (File.Exists(Path.Combine(sub, "manifest.json")) ||
+                    File.Exists(Path.Combine(sub, "modrinth.index.json")))
+                    return sub;
+            }
+
+            return sourceFolder;
         }
 
         // ── CurseForge ─────────────────────────────────────────────────────────

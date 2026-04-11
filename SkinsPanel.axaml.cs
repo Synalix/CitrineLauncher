@@ -45,6 +45,7 @@ namespace CitrineLauncher
             this.Loaded += (_, _) => SetupWebView();
             this.Unloaded += (_, _) =>
             {
+                _cts.Cancel();
                 _cts.Dispose();
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
             };
@@ -177,6 +178,8 @@ namespace CitrineLauncher
 
                 if (activeSkin != null)
                     await ExecuteViewerScript($"setSkin('{activeSkin.Url}', '{model}')");
+                else
+                    await ExecuteViewerScript("loadDefault()");
                 if (activeCape != null)
                     await ExecuteViewerScript($"setCape('{activeCape.Url}')");
                 else
@@ -229,11 +232,7 @@ namespace CitrineLauncher
             if (!string.IsNullOrEmpty(account.SkinPath) && _webViewReady)
             {
                 SkinNameLabel.Text = Path.GetFileName(account.SkinPath);
-                var skinPath = account.SkinPath;
-                _ = Task.Run(async () => {
-                    var dataUrl = await FileToDataUrl(skinPath);
-                    await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
-                });
+                _ = LoadOfflineSkinAsync(account.SkinPath, model, _cts.Token);
             }
             else
             {
@@ -395,13 +394,7 @@ namespace CitrineLauncher
                 account.SkinModel = model;
                 Settings.Instance.Save();
                 if (_webViewReady && !string.IsNullOrEmpty(account.SkinPath))
-                {
-                    var skinPath = account.SkinPath;
-                    _ = Task.Run(async () => {
-                        var dataUrl = await FileToDataUrl(skinPath);
-                        await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
-                    });
-                }
+                    _ = LoadOfflineSkinAsync(account.SkinPath, model, _cts.Token);
             }
             else if (account != null && _currentProfile != null)
             {
@@ -438,9 +431,24 @@ namespace CitrineLauncher
             }
         }
 
-        private static async Task<string> FileToDataUrl(string filePath)
+        private async Task LoadOfflineSkinAsync(string skinPath, string model, CancellationToken ct)
         {
-            var bytes = await File.ReadAllBytesAsync(filePath);
+            try
+            {
+                var dataUrl = await FileToDataUrl(skinPath, ct);
+                if (ct.IsCancellationRequested) return;
+                await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadOfflineSkinAsync error: {ex.Message}");
+            }
+        }
+
+        private static async Task<string> FileToDataUrl(string filePath, CancellationToken ct = default)
+        {
+            var bytes = await File.ReadAllBytesAsync(filePath, ct);
             return "data:image/png;base64," + Convert.ToBase64String(bytes);
         }
 

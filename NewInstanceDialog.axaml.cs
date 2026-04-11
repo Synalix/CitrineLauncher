@@ -161,7 +161,10 @@ namespace CitrineLauncher
                 StatusText.IsVisible = true;
                 try
                 {
-                    loaderVersion = await InstanceManager.GetLatestFabricLoaderVersionAsync();
+                    var fabricVersions = await InstanceManager.GetFabricLoaderVersionsAsync(gameVersion);
+                    if (fabricVersions.Count == 0)
+                        throw new InvalidOperationException($"No Fabric loader found for Minecraft {gameVersion}.");
+                    loaderVersion = fabricVersions[0];
                     StatusText.IsVisible = false;
                 }
                 catch (Exception ex)
