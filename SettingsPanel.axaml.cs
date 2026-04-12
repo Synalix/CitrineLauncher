@@ -123,20 +123,30 @@ namespace CitrineLauncher
                 AddMicrosoftButton.IsEnabled = false;
                 try
                 {
-                    // Create the account first so its stable Id is available for the session cache key.
-                    var newAccount = new Account { Type = "Microsoft" };
-                    var (username, _) = await MicrosoftAuth.AuthenticateAsync(newAccount.Id);
+                    // Bug 3: resolve any existing account first so the session is cached under its stable Id.
+                    // We do a temporary auth to discover the username, then re-auth under the correct id
+                    // if the account already exists, discarding the temp cache entry.
+                    var tempAccount = new Account { Type = "Microsoft" };
+                    var (username, _) = await MicrosoftAuth.AuthenticateAsync(tempAccount.Id);
                     if (!string.IsNullOrEmpty(username))
                     {
                         var existing = settings.Accounts.FirstOrDefault(a =>
                             a.Type == "Microsoft" &&
                             string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
-                        if (existing == null)
+
+                        if (existing != null)
                         {
-                            newAccount.Username = username;
-                            settings.Accounts.Add(newAccount);
+                            // Re-auth under the persisted account's stable id so the session cache is correct
+                            MicrosoftAuth.ClearCache(tempAccount.Id);
+                            await MicrosoftAuth.AuthenticateAsync(existing.Id);
+                        }
+                        else
+                        {
+                            tempAccount.Username = username;
+                            settings.Accounts.Add(tempAccount);
                             RefreshAccountList();
                         }
+
                         settings.Username = username;
                         settings.Save();
                         SettingsSaved?.Invoke(this, settings);
@@ -252,11 +262,24 @@ namespace CitrineLauncher
                 if (parentWindow != null)
                 {
                     var result = await dialog.ShowDialog<string?>(parentWindow);
-                    if (result != null)
+                    if (result != null && !string.Equals(result, previousUsername, StringComparison.OrdinalIgnoreCase))
                     {
+                        // Bug 1: reject rename if another offline account already has this username
+                        if (Settings.Instance.Accounts.Any(a =>
+                                a != selectedAccount &&
+                                a.Type == "Offline" &&
+                                string.Equals(a.Username, result, StringComparison.OrdinalIgnoreCase)))
+                            return;
+
+                        // Bug 2: unregister old name from skin server before renaming
+                        OfflineSkinServer.Shared.Unregister(selectedAccount);
+
                         selectedAccount.Username = result;
                         if (string.Equals(Settings.Instance.Username, previousUsername, StringComparison.OrdinalIgnoreCase))
                             Settings.Instance.Username = result;
+
+                        // Re-register under the new username
+                        OfflineSkinServer.Shared.Register(selectedAccount);
 
                         Settings.Instance.Save();
                         RefreshAccountList();
@@ -270,6 +293,10 @@ namespace CitrineLauncher
         {
             if (AccountsList.SelectedItem is Account selectedAccount)
             {
+                // Bug 2: unregister from skin server before removing
+                if (selectedAccount.Type == "Offline")
+                    OfflineSkinServer.Shared.Unregister(selectedAccount);
+
                 if (Settings.Instance.RemoveAccount(selectedAccount))
                 {
                     RefreshAccountList();
