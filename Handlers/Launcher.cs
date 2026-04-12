@@ -83,7 +83,16 @@ namespace CitrineLauncher
 
                 MSession session;
                 if (account?.Type == "Microsoft")
-                    session = await Handlers.MicrosoftAuth.GetSessionAsync();
+                {
+                    var cached = await Handlers.MicrosoftAuth.GetSessionAsync(account.Id);
+                    // If the cached session belongs to a different account, force re-auth
+                    if (!string.Equals(cached.Username, username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Handlers.MicrosoftAuth.ClearCache(account.Id);
+                        cached = await Handlers.MicrosoftAuth.GetSessionAsync(account.Id);
+                    }
+                    session = cached;
+                }
                 else
                 {
                     // Use the account's stable UUID so the skin server can identify it
@@ -91,7 +100,7 @@ namespace CitrineLauncher
                     settings.Save();
                     session = new MSession(username, "access_token", offlineUuid)
                     {
-                        UserType = "msa"
+                        UserType = "Mojang"
                     };
                 }
 

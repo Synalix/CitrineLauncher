@@ -147,7 +147,7 @@ namespace CitrineLauncher
                 var profileKey = $"{account.Username}|{account.Type}";
                 if (_currentProfile == null || _cachedProfileKey != profileKey)
                 {
-                    var session = await MicrosoftAuth.GetSessionAsync();
+                    var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                     if (ct.IsCancellationRequested) return;
                     _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
                     if (ct.IsCancellationRequested) return;
@@ -271,7 +271,7 @@ namespace CitrineLauncher
             {
                 if (account.Type == "Microsoft")
                 {
-                    var session = await MicrosoftAuth.GetSessionAsync();
+                    var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                     await SkinApiHandler.UploadSkinAsync(session.AccessToken, filePath, _currentModel);
                     InvalidateProfileCache();
                     SkinNameLabel.Text = "Current skin";
@@ -339,7 +339,7 @@ namespace CitrineLauncher
             ToggleCapeBtn.IsEnabled = false;
             try
             {
-                var session = await MicrosoftAuth.GetSessionAsync();
+                var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                 if (_capeEnabled)
                 {
                     await SkinApiHandler.DisableCapeAsync(session.AccessToken);
@@ -374,11 +374,12 @@ namespace CitrineLauncher
             if (!_capeEnabled) return;
             if (CapesList.SelectedItem is not MinecraftCape cape) return;
             if (_activeCape?.Id == cape.Id) return;
-            if (ResolveSelectedAccount()?.Type != "Microsoft") return;
+            var capeAccount = ResolveSelectedAccount();
+            if (capeAccount?.Type != "Microsoft") return;
             ClearErrors();
             try
             {
-                var session = await MicrosoftAuth.GetSessionAsync();
+                var session = await MicrosoftAuth.GetSessionAsync(capeAccount.Id);
                 await SkinApiHandler.SetActiveCapeAsync(session.AccessToken, cape.Id);
                 InvalidateProfileCache();
                 _activeCape = cape;

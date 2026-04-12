@@ -11,6 +11,10 @@ namespace CitrineLauncher.Handlers
 {
     public class Account
     {
+        // Stable account identity — generated once on creation, never changes.
+        // Used to key the Microsoft session cache and selection state so they survive username changes.
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
         public string Username { get; set; } = string.Empty;
         public string Type { get; set; } = "Offline"; // "Offline" or "Microsoft"
         public string SkinPath { get; set; } = string.Empty;  // offline only: local PNG path

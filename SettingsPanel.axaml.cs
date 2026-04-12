@@ -123,14 +123,18 @@ namespace CitrineLauncher
                 AddMicrosoftButton.IsEnabled = false;
                 try
                 {
-                    var (username, _) = await MicrosoftAuth.AuthenticateAsync();
+                    // Create the account first so its stable Id is available for the session cache key.
+                    var newAccount = new Account { Type = "Microsoft" };
+                    var (username, _) = await MicrosoftAuth.AuthenticateAsync(newAccount.Id);
                     if (!string.IsNullOrEmpty(username))
                     {
-                        if (!settings.Accounts.Any(a =>
-                                a.Type == "Microsoft" &&
-                                string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase)))
+                        var existing = settings.Accounts.FirstOrDefault(a =>
+                            a.Type == "Microsoft" &&
+                            string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
+                        if (existing == null)
                         {
-                            settings.Accounts.Add(new Account { Username = username, Type = "Microsoft" });
+                            newAccount.Username = username;
+                            settings.Accounts.Add(newAccount);
                             RefreshAccountList();
                         }
                         settings.Username = username;

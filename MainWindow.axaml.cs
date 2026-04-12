@@ -186,6 +186,8 @@ namespace CitrineLauncher
 
         private void OpenSettings(string? initialTab = null)
         {
+            accountCombo.IsDropDownOpen = false;
+            cbInstances.IsDropDownOpen = false;
             if (Handlers.SkinsHandler.IsOpen)
                 Handlers.SkinsHandler.HideSkins(CenterPanel);
             SettingsHandler.ShowSettings(CenterPanel, HandleSettingsSaved, initialTab);
@@ -222,6 +224,8 @@ namespace CitrineLauncher
 
         private void BtnSkins_Click(object? sender, RoutedEventArgs e)
         {
+            accountCombo.IsDropDownOpen = false;
+            cbInstances.IsDropDownOpen = false;
             if (Handlers.SkinsHandler.IsOpen)
             {
                 Handlers.SkinsHandler.HideSkins(CenterPanel);

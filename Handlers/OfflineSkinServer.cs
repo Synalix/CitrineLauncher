@@ -92,13 +92,14 @@ namespace CitrineLauncher.Handlers
                 var path = req.Url?.AbsolutePath ?? "/";
 
                 // GET / — API metadata (authlib-injector reads this first)
+                // signaturePublickey is intentionally omitted — an empty string causes authlib-injector
+                // to abort during startup because it tries to parse it as a PEM key.
                 if (path == "/" || path == string.Empty)
                 {
                     await WriteJsonAsync(resp, new
                     {
                         meta = new { serverName = "CitrineLauncher" },
-                        skinDomains = new[] { "localhost" },
-                        signaturePublickey = ""
+                        skinDomains = new[] { "localhost" }
                     });
                     return;
                 }
@@ -155,6 +156,32 @@ namespace CitrineLauncher.Handlers
                     resp.ContentLength64 = bytes.Length;
                     await resp.OutputStream.WriteAsync(bytes);
                     resp.Close();
+                    return;
+                }
+
+                // POST /api/profiles/minecraft — bulk username-to-profile lookup used by
+                // authlib-injector's legacy skin polyfill before it fetches the profile endpoint.
+                if (path.Equals("/api/profiles/minecraft", StringComparison.OrdinalIgnoreCase)
+                    && req.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
+                    var body = await reader.ReadToEndAsync();
+                    string[] requestedNames;
+                    try { requestedNames = JsonSerializer.Deserialize<string[]>(body) ?? Array.Empty<string>(); }
+                    catch { requestedNames = Array.Empty<string>(); }
+
+                    var results = new List<object>();
+                    lock (_byUuid)
+                    {
+                        foreach (var name in requestedNames)
+                        {
+                            var match = _byUuid.Values.FirstOrDefault(a =>
+                                string.Equals(a.Username, name, StringComparison.OrdinalIgnoreCase));
+                            if (match != null)
+                                results.Add(new { id = match.GetOrCreateOfflineUuid(), name = match.Username });
+                        }
+                    }
+                    await WriteJsonAsync(resp, results);
                     return;
                 }
 
