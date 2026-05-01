@@ -48,13 +48,44 @@ namespace CitrineLauncher
             MinRamTextBox.LostFocus += (s, e) =>
             {
                 if (int.TryParse(MinRamTextBox.Text, out int val) && val >= 256)
+                {
                     settings.MinRam = val;
+                    // Clamp MaxRam so it stays >= MinRam
+                    if (settings.MaxRam < val)
+                    {
+                        settings.MaxRam = val;
+                        MaxRamTextBox.Text = val.ToString();
+                    }
+                    RamErrorLabel.IsVisible = false;
+                }
+                else
+                {
+                    RamErrorLabel.Text = "Minimum RAM must be a number ≥ 256 MB.";
+                    RamErrorLabel.IsVisible = true;
+                    MinRamTextBox.Text = settings.MinRam.ToString();
+                }
             };
 
             MaxRamTextBox.LostFocus += (s, e) =>
             {
                 if (int.TryParse(MaxRamTextBox.Text, out int val) && val >= 256)
+                {
+                    if (val < settings.MinRam)
+                    {
+                        RamErrorLabel.Text = $"Maximum RAM must be ≥ minimum RAM ({settings.MinRam} MB).";
+                        RamErrorLabel.IsVisible = true;
+                        MaxRamTextBox.Text = settings.MaxRam.ToString();
+                        return;
+                    }
                     settings.MaxRam = val;
+                    RamErrorLabel.IsVisible = false;
+                }
+                else
+                {
+                    RamErrorLabel.Text = "Maximum RAM must be a number ≥ 256 MB.";
+                    RamErrorLabel.IsVisible = true;
+                    MaxRamTextBox.Text = settings.MaxRam.ToString();
+                }
             };
 
             // Show folder path (read-only display - not a TwoWay binding to avoid writing on every keystroke, bug #7)
@@ -92,16 +123,28 @@ namespace CitrineLauncher
                 AddMicrosoftButton.IsEnabled = false;
                 try
                 {
-                    var (username, _) = await MicrosoftAuth.AuthenticateAsync();
+                    // Authenticate once to discover the username
+                    var tempAccount = new Account { Type = "Microsoft" };
+                    var (username, session) = await MicrosoftAuth.AuthenticateAsync(tempAccount.Id);
                     if (!string.IsNullOrEmpty(username))
                     {
-                        if (!settings.Accounts.Any(a =>
-                                a.Type == "Microsoft" &&
-                                string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase)))
+                        var existing = settings.Accounts.FirstOrDefault(a =>
+                            a.Type == "Microsoft" &&
+                            string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
+
+                        if (existing != null)
                         {
-                            settings.Accounts.Add(new Account { Username = username, Type = "Microsoft" });
+                            // Re-key the cache from temp account to existing account,
+                            // reusing the session we just got instead of re-authenticating
+                            MicrosoftAuth.ReKeyCache(tempAccount.Id, existing.Id);
+                        }
+                        else
+                        {
+                            tempAccount.Username = username;
+                            settings.Accounts.Add(tempAccount);
                             RefreshAccountList();
                         }
+
                         settings.Username = username;
                         settings.Save();
                         SettingsSaved?.Invoke(this, settings);
@@ -121,18 +164,46 @@ namespace CitrineLauncher
             {
                 if (!_isEditingFolder)
                 {
+                    FolderErrorLabel.IsVisible = false;
                     SetFolderEditMode(true);
                     FolderPathTextBox.Text = settings.MinecraftPath;
                     FolderPathTextBox.Focus();
                 }
                 else
                 {
-                    var newPath = FolderPathTextBox.Text ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(newPath))
+                    var newPath = FolderPathTextBox.Text?.Trim() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(newPath))
                     {
-                        settings.MinecraftPath = newPath;
-                        FolderPathTextBlock.Text = newPath;
+                        FolderErrorLabel.Text = "Path cannot be empty.";
+                        FolderErrorLabel.IsVisible = true;
+                        return;
                     }
+                    if (!System.IO.Path.IsPathRooted(newPath))
+                    {
+                        FolderErrorLabel.Text = "Path must be an absolute path (e.g. C:\\Games\\Minecraft).";
+                        FolderErrorLabel.IsVisible = true;
+                        return;
+                    }
+
+                    var oldPath = settings.MinecraftPath;
+                    if (!string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Migrate existing data to new path
+                        try
+                        {
+                            MigrateData(oldPath, newPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            FolderErrorLabel.Text = $"Failed to migrate data: {ex.Message}";
+                            FolderErrorLabel.IsVisible = true;
+                            return;
+                        }
+                    }
+
+                    FolderErrorLabel.IsVisible = false;
+                    settings.MinecraftPath = newPath;
+                    FolderPathTextBlock.Text = newPath;
                     SetFolderEditMode(false);
                 }
             };
@@ -154,6 +225,42 @@ namespace CitrineLauncher
 
             // Close button
             CloseButton.Click += (s, e) => CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private static void MigrateData(string fromPath, string toPath)
+        {
+            if (!System.IO.Directory.Exists(fromPath)) return;
+            if (System.IO.Directory.Exists(toPath)) return;
+
+            System.IO.Directory.CreateDirectory(toPath);
+
+            var instancesSrc = System.IO.Path.Combine(fromPath, "instances");
+            if (System.IO.Directory.Exists(instancesSrc))
+                CopyDirectory(instancesSrc, System.IO.Path.Combine(toPath, "instances"));
+
+            var versionsSrc = System.IO.Path.Combine(fromPath, "versions");
+            if (System.IO.Directory.Exists(versionsSrc))
+                CopyDirectory(versionsSrc, System.IO.Path.Combine(toPath, "versions"));
+
+            var skinsSrc = System.IO.Path.Combine(fromPath, "citrine-skins");
+            if (System.IO.Directory.Exists(skinsSrc))
+                CopyDirectory(skinsSrc, System.IO.Path.Combine(toPath, "citrine-skins"));
+
+            var authlibSrc = System.IO.Path.Combine(fromPath, "authlib-injector.jar");
+            if (System.IO.File.Exists(authlibSrc))
+                System.IO.File.Copy(authlibSrc, System.IO.Path.Combine(toPath, "authlib-injector.jar"), overwrite: true);
+        }
+
+        private static void CopyDirectory(string src, string dst)
+        {
+            System.IO.Directory.CreateDirectory(dst);
+            foreach (var file in System.IO.Directory.GetFiles(src, "*", System.IO.SearchOption.AllDirectories))
+            {
+                var relative = System.IO.Path.GetRelativePath(src, file);
+                var destFile = System.IO.Path.Combine(dst, relative);
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(destFile)!);
+                System.IO.File.Copy(file, destFile, overwrite: true);
+            }
         }
 
         private void UpdateRamVisibility()
@@ -206,11 +313,24 @@ namespace CitrineLauncher
                 if (parentWindow != null)
                 {
                     var result = await dialog.ShowDialog<string?>(parentWindow);
-                    if (result != null)
+                    if (result != null && !string.Equals(result, previousUsername, StringComparison.OrdinalIgnoreCase))
                     {
+                        // Bug 1: reject rename if another offline account already has this username
+                        if (Settings.Instance.Accounts.Any(a =>
+                                a != selectedAccount &&
+                                a.Type == "Offline" &&
+                                string.Equals(a.Username, result, StringComparison.OrdinalIgnoreCase)))
+                            return;
+
+                        // Bug 2: unregister old name from skin server before renaming
+                        OfflineSkinServer.Shared.Unregister(selectedAccount);
+
                         selectedAccount.Username = result;
                         if (string.Equals(Settings.Instance.Username, previousUsername, StringComparison.OrdinalIgnoreCase))
                             Settings.Instance.Username = result;
+
+                        // Re-register under the new username
+                        OfflineSkinServer.Shared.Register(selectedAccount);
 
                         Settings.Instance.Save();
                         RefreshAccountList();
@@ -224,6 +344,12 @@ namespace CitrineLauncher
         {
             if (AccountsList.SelectedItem is Account selectedAccount)
             {
+                // Unregister from skin server before removing
+                if (selectedAccount.Type == "Offline")
+                    OfflineSkinServer.Shared.Unregister(selectedAccount);
+                else if (selectedAccount.Type == "Microsoft")
+                    MicrosoftAuth.ClearCache(selectedAccount.Id);
+
                 if (Settings.Instance.RemoveAccount(selectedAccount))
                 {
                     RefreshAccountList();

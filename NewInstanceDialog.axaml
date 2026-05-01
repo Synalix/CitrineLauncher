@@ -2,23 +2,28 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="CitrineLauncher.NewInstanceDialog"
         Title="New Instance"
-        Width="420" Height="360"
+        Width="460" Height="320"
         WindowStartupLocation="CenterOwner"
         Background="#1E1E1E"
         Foreground="White"
         CanResize="False">
 
-    <Grid Margin="20" RowDefinitions="Auto, *, Auto">
+    <Grid Margin="24,20,24,20" RowDefinitions="Auto, *, Auto">
         <TextBlock Text="Create New Instance" FontSize="15" FontWeight="Bold"
                    Foreground="{StaticResource CitrineBrush}"/>
 
         <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="10">
-            <TextBox x:Name="NameInput"
-                     Watermark="Instance name"
-                     Background="#2A2A2A"
-                     BorderBrush="#333"
-                     Padding="10"/>
 
+            <!-- Loader selector (always visible, shown first) -->
+            <ComboBox x:Name="LoaderCombo"
+                      PlaceholderText="Loader"
+                      Background="#2A2A2A"
+                      BorderThickness="0"
+                      HorizontalAlignment="Stretch"
+                      Padding="10,8"
+                      SelectionChanged="LoaderCombo_SelectionChanged"/>
+
+            <!-- Minecraft version (always visible) -->
             <ComboBox x:Name="VersionCombo"
                       PlaceholderText="Select Minecraft version"
                       Background="#2A2A2A"
@@ -26,31 +31,42 @@
                       HorizontalAlignment="Stretch"
                       Padding="10,8"/>
 
-            <ComboBox x:Name="LoaderCombo"
-                      PlaceholderText="Loader"
-                      Background="#2A2A2A"
-                      BorderThickness="0"
-                      HorizontalAlignment="Stretch"
-                      Padding="10,8"/>
+            <!-- Name — hidden for Vanilla (auto-named); shown for Fabric so user can override -->
+            <TextBox x:Name="NameInput"
+                     Watermark="Instance name (optional)"
+                     Background="#2A2A2A"
+                     BorderBrush="#333"
+                     Padding="10"
+                     IsVisible="False"/>
 
-            <!-- Modpack import row -->
-            <Grid ColumnDefinitions="*, Auto">
+            <!-- Modpack row — only shown when Fabric is selected -->
+            <Grid x:Name="ModpackRow" ColumnDefinitions="*, 58, 80" IsVisible="False">
                 <TextBox x:Name="ModpackPathBox"
                          Grid.Column="0"
-                         Watermark="Import modpack (optional .zip)"
+                         Watermark="Modpack (.zip / .mrpack)"
                          Background="#2A2A2A"
                          BorderBrush="#333"
                          IsReadOnly="True"
                          Padding="10"/>
                 <Button x:Name="BrowseModpackButton"
                         Grid.Column="1"
-                        Content="Browse"
-                        Width="72" Height="36"
+                        Content="Local"
+                        Height="36"
                         Margin="6,0,0,0"
                         Background="#2A2A2A"
                         Foreground="White"
                         CornerRadius="6"
                         Click="BrowseModpackButton_Click"/>
+                <Button x:Name="BrowseModrinthButton"
+                        Grid.Column="2"
+                        Content="Modrinth"
+                        Height="36"
+                        Margin="6,0,0,0"
+                        Background="{StaticResource CitrineBrush}"
+                        Foreground="Black"
+                        FontWeight="SemiBold"
+                        CornerRadius="6"
+                        Click="BrowseModrinthButton_Click"/>
             </Grid>
 
             <TextBlock x:Name="StatusText"

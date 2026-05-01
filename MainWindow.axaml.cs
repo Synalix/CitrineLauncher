@@ -39,7 +39,10 @@ namespace CitrineLauncher
             // 2. Setup account list
             RefreshAccountList();
 
-            // 3. Setup events
+            // 3. Refresh game versions cache in background (daily)
+            _ = GameVersionCache.GetReleaseVersionsAsync();
+
+            // 4. Setup events
             btnSettings.Click += BtnSettings_Click;
             btnLaunch.Click += BtnLaunch_Click;
             btnFolder.Click += BtnFolder_Click;
@@ -88,6 +91,7 @@ namespace CitrineLauncher
                 // Unsubscribe game process event so it doesn't post to a dead window
                 if (currentGameProcess != null)
                     currentGameProcess.Exited -= GameProcess_Exited;
+                Handlers.OfflineSkinServer.Shared.Dispose();
             };
         }
 
@@ -138,7 +142,7 @@ namespace CitrineLauncher
 
             if (accounts.Length > 0)
             {
-                var match = accounts.FirstOrDefault(a => a.Username == savedUsername);
+                var match = accounts.FirstOrDefault(a => string.Equals(a.Username, savedUsername, StringComparison.OrdinalIgnoreCase));
                 var fallbackSelection = selectedAccount != null && accounts.Contains(selectedAccount)
                     ? selectedAccount
                     : match ?? accounts[0];
@@ -159,6 +163,8 @@ namespace CitrineLauncher
             if (e.PropertyName == nameof(Settings.MinecraftPath))
             {
                 ConfigureLauncher(Settings.Instance.MinecraftPath);
+                Handlers.InstanceManager.Instance.Load();
+                RefreshInstanceList();
             }
         }
 
@@ -183,6 +189,8 @@ namespace CitrineLauncher
 
         private void OpenSettings(string? initialTab = null)
         {
+            accountCombo.IsDropDownOpen = false;
+            cbInstances.IsDropDownOpen = false;
             if (Handlers.SkinsHandler.IsOpen)
                 Handlers.SkinsHandler.HideSkins(CenterPanel);
             SettingsHandler.ShowSettings(CenterPanel, HandleSettingsSaved, initialTab);
@@ -219,11 +227,16 @@ namespace CitrineLauncher
 
         private void BtnSkins_Click(object? sender, RoutedEventArgs e)
         {
+            accountCombo.IsDropDownOpen = false;
+            cbInstances.IsDropDownOpen = false;
             if (Handlers.SkinsHandler.IsOpen)
             {
                 Handlers.SkinsHandler.HideSkins(CenterPanel);
                 return;
             }
+
+            if (SettingsHandler.IsOpen)
+                SettingsHandler.CloseSettings(CenterPanel);
 
             Handlers.SkinsHandler.ShowSkins(CenterPanel);
         }

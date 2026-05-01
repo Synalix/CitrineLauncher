@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using CitrineLauncher.Handlers;
 using CitrineLauncher.Models;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
@@ -8,6 +9,7 @@ using CmlLib.Core.ProcessBuilder;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -81,9 +83,43 @@ namespace CitrineLauncher
 
                 MSession session;
                 if (account?.Type == "Microsoft")
-                    session = await Handlers.MicrosoftAuth.GetSessionAsync();
+                {
+                    var cached = await Handlers.MicrosoftAuth.GetSessionAsync(account.Id);
+                    // If the cached session belongs to a different account, force re-auth
+                    if (!string.Equals(cached.Username, username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Handlers.MicrosoftAuth.ClearCache(account.Id);
+                        cached = await Handlers.MicrosoftAuth.GetSessionAsync(account.Id);
+                    }
+                    session = cached;
+                }
                 else
-                    session = MSession.CreateOfflineSession(username);
+                {
+                    // Use the account's stable UUID so the skin server can identify it
+                    var offlineUuid = account?.GetOrCreateOfflineUuid() ?? Guid.NewGuid().ToString("N");
+                    session = new MSession(username, "access_token", offlineUuid)
+                    {
+                        UserType = "Mojang"
+                    };
+                }
+
+                // Build extra JVM args — inject authlib-injector for offline accounts with a skin
+                var extraJvmArgs = new System.Collections.Generic.List<MArgument>();
+                if (account?.Type == "Offline" && !string.IsNullOrEmpty(account.SkinPath) && File.Exists(account.SkinPath))
+                {
+                    try
+                    {
+                        lblStatus.Text = "Downloading skin agent...";
+                        await OfflineSkinServer.EnsureJarAsync();
+                        OfflineSkinServer.Shared.Register(account);
+                        var agentArg = $"-javaagent:{OfflineSkinServer.JarPath}={OfflineSkinServer.Shared.BaseUrl}";
+                        extraJvmArgs.Add(new MArgument(agentArg));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Skin agent setup failed (continuing without it): {ex.Message}");
+                    }
+                }
 
                 var launchOptions = new MLaunchOption
                 {
@@ -91,11 +127,10 @@ namespace CitrineLauncher
                     MaximumRamMb = settings.MaxRam,
                     MinimumRamMb = settings.MinRam,
                     GameLauncherName = "CitrineLauncher",
-                    // Per-instance game directory: mods/configs stay isolated per instance
-                    ExtraGameArguments = new CmlLib.Core.ProcessBuilder.MArgument[]
+                    ExtraJvmArguments = extraJvmArgs.Count > 0 ? extraJvmArgs : Enumerable.Empty<MArgument>(),
+                    ExtraGameArguments = new MArgument[]
                     {
-                        new("--gameDir"),
-                        new(instance.InstanceDirectory)
+                        new MArgument($"--gameDir \"{instance.InstanceDirectory}\"")
                     }
                 };
 

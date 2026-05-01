@@ -11,6 +11,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
     <InformationalVersion>1.2.2</InformationalVersion>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Update="ModrinthBrowseDialog.axaml.cs">
+      <DependentUpon>ModrinthBrowseDialog.axaml</DependentUpon>
+    </Compile>
     <Compile Update="OfflineAccountDialog.axaml.cs">
       <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
     </Compile>

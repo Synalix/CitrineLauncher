@@ -19,7 +19,7 @@ namespace CitrineLauncher
         private CancellationTokenSource _cts = new();
         private Account? _activeAccount;
         private MinecraftProfile? _currentProfile;
-        private string? _cachedProfileUsername;
+        private string? _cachedProfileKey; // "username|type"
         private MinecraftCape? _activeCape;
         private bool _capeEnabled;
         private string _currentModel = "classic";
@@ -45,6 +45,7 @@ namespace CitrineLauncher
             this.Loaded += (_, _) => SetupWebView();
             this.Unloaded += (_, _) =>
             {
+                _cts.Cancel();
                 _cts.Dispose();
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
             };
@@ -142,14 +143,30 @@ namespace CitrineLauncher
             ClearErrors();
             try
             {
-                // Reuse cached profile if we already loaded it for this account
-                if (_currentProfile == null || _cachedProfileUsername != account.Username)
+                // Reuse cached profile only if username AND type match
+                var profileKey = $"{account.Username}|{account.Type}";
+                if (_currentProfile == null || _cachedProfileKey != profileKey)
                 {
-                    var session = await MicrosoftAuth.GetSessionAsync();
+                    var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                     if (ct.IsCancellationRequested) return;
+
+                    // Validate session belongs to the selected account
+                    if (!string.Equals(session.Username, account.Username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MicrosoftAuth.ClearCache(account.Id);
+                        session = await MicrosoftAuth.GetSessionAsync(account.Id);
+                    }
+                    if (ct.IsCancellationRequested) return;
+
                     _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
                     if (ct.IsCancellationRequested) return;
-                    _cachedProfileUsername = account.Username;
+                    _cachedProfileKey = profileKey;
+                }
+
+                if (_currentProfile == null)
+                {
+                    ShowSkinError("Profile data unavailable");
+                    return;
                 }
 
                 // Derive all state before touching the UI
@@ -177,6 +194,8 @@ namespace CitrineLauncher
 
                 if (activeSkin != null)
                     await ExecuteViewerScript($"setSkin('{activeSkin.Url}', '{model}')");
+                else
+                    await ExecuteViewerScript("loadDefault()");
                 if (activeCape != null)
                     await ExecuteViewerScript($"setCape('{activeCape.Url}')");
                 else
@@ -196,7 +215,7 @@ namespace CitrineLauncher
         private void InvalidateProfileCache()
         {
             _currentProfile = null;
-            _cachedProfileUsername = null;
+            _cachedProfileKey = null;
         }
 
         private void LoadOfflineAccount(Account account)
@@ -204,7 +223,9 @@ namespace CitrineLauncher
             ClearErrors();
             _currentProfile = null;
             _activeCape = null;
+            _capeEnabled = false;
             CapesList.ItemsSource = null;
+            if (_webViewReady) _ = ExecuteViewerScript("clearCape()");
 
             if (string.IsNullOrEmpty(account.SkinPath))
             {
@@ -229,11 +250,7 @@ namespace CitrineLauncher
             if (!string.IsNullOrEmpty(account.SkinPath) && _webViewReady)
             {
                 SkinNameLabel.Text = Path.GetFileName(account.SkinPath);
-                var skinPath = account.SkinPath;
-                _ = Task.Run(async () => {
-                    var dataUrl = await FileToDataUrl(skinPath);
-                    await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
-                });
+                _ = LoadOfflineSkinAsync(account.SkinPath, model, _cts.Token);
             }
             else
             {
@@ -269,7 +286,7 @@ namespace CitrineLauncher
             {
                 if (account.Type == "Microsoft")
                 {
-                    var session = await MicrosoftAuth.GetSessionAsync();
+                    var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                     await SkinApiHandler.UploadSkinAsync(session.AccessToken, filePath, _currentModel);
                     InvalidateProfileCache();
                     SkinNameLabel.Text = "Current skin";
@@ -337,7 +354,7 @@ namespace CitrineLauncher
             ToggleCapeBtn.IsEnabled = false;
             try
             {
-                var session = await MicrosoftAuth.GetSessionAsync();
+                var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                 if (_capeEnabled)
                 {
                     await SkinApiHandler.DisableCapeAsync(session.AccessToken);
@@ -372,11 +389,12 @@ namespace CitrineLauncher
             if (!_capeEnabled) return;
             if (CapesList.SelectedItem is not MinecraftCape cape) return;
             if (_activeCape?.Id == cape.Id) return;
-            if (ResolveSelectedAccount()?.Type != "Microsoft") return;
+            var capeAccount = ResolveSelectedAccount();
+            if (capeAccount?.Type != "Microsoft") return;
             ClearErrors();
             try
             {
-                var session = await MicrosoftAuth.GetSessionAsync();
+                var session = await MicrosoftAuth.GetSessionAsync(capeAccount.Id);
                 await SkinApiHandler.SetActiveCapeAsync(session.AccessToken, cape.Id);
                 InvalidateProfileCache();
                 _activeCape = cape;
@@ -395,13 +413,7 @@ namespace CitrineLauncher
                 account.SkinModel = model;
                 Settings.Instance.Save();
                 if (_webViewReady && !string.IsNullOrEmpty(account.SkinPath))
-                {
-                    var skinPath = account.SkinPath;
-                    _ = Task.Run(async () => {
-                        var dataUrl = await FileToDataUrl(skinPath);
-                        await Dispatcher.UIThread.InvokeAsync(() => ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')"));
-                    });
-                }
+                    _ = LoadOfflineSkinAsync(account.SkinPath, model, _cts.Token);
             }
             else if (account != null && _currentProfile != null)
             {
@@ -438,9 +450,24 @@ namespace CitrineLauncher
             }
         }
 
-        private static async Task<string> FileToDataUrl(string filePath)
+        private async Task LoadOfflineSkinAsync(string skinPath, string model, CancellationToken ct)
         {
-            var bytes = await File.ReadAllBytesAsync(filePath);
+            try
+            {
+                var dataUrl = await FileToDataUrl(skinPath, ct);
+                if (ct.IsCancellationRequested) return;
+                await ExecuteViewerScript($"setSkin('{dataUrl}', '{model}')");
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadOfflineSkinAsync error: {ex.Message}");
+            }
+        }
+
+        private static async Task<string> FileToDataUrl(string filePath, CancellationToken ct = default)
+        {
+            var bytes = await File.ReadAllBytesAsync(filePath, ct);
             return "data:image/png;base64," + Convert.ToBase64String(bytes);
         }
 
@@ -450,6 +477,36 @@ namespace CitrineLauncher
                 return "Invalid file — must be a PNG image.";
             if (new FileInfo(path).Length > 1_000_000)
                 return "File too large — skin PNG must be under 1MB.";
+
+            // Verify PNG signature and image dimensions
+            try
+            {
+                using var fs = File.OpenRead(path);
+
+                // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+                Span<byte> sig = stackalloc byte[8];
+                if (fs.Read(sig) < 8 ||
+                    sig[0] != 0x89 || sig[1] != 0x50 || sig[2] != 0x4E || sig[3] != 0x47 ||
+                    sig[4] != 0x0D || sig[5] != 0x0A || sig[6] != 0x1A || sig[7] != 0x0A)
+                    return "Invalid file — not a valid PNG image.";
+
+                // IHDR chunk: 4 bytes length, 4 bytes "IHDR", 4 bytes width, 4 bytes height
+                Span<byte> ihdr = stackalloc byte[16];
+                if (fs.Read(ihdr) < 16)
+                    return "Invalid file — PNG header is truncated.";
+
+                int width  = (ihdr[8]  << 24) | (ihdr[9]  << 16) | (ihdr[10] << 8) | ihdr[11];
+                int height = (ihdr[12] << 24) | (ihdr[13] << 16) | (ihdr[14] << 8) | ihdr[15];
+
+                bool validDimensions = (width == 64 && height == 64) || (width == 64 && height == 32);
+                if (!validDimensions)
+                    return $"Invalid skin dimensions ({width}x{height}) — must be 64x64 or 64x32.";
+            }
+            catch (Exception ex)
+            {
+                return $"Could not read file: {ex.Message}";
+            }
+
             return null;
         }
 

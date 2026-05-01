@@ -15,6 +15,7 @@ namespace CitrineLauncher
     {
         private readonly MinecraftLauncher _launcher;
         private string? _modpackPath;
+        private string? _modpackName; // set when importing from Modrinth browse
 
         public NewInstanceDialog(MinecraftLauncher launcher)
         {
@@ -24,37 +25,75 @@ namespace CitrineLauncher
             LoaderCombo.ItemsSource = new[] { "Vanilla", "Fabric" };
             LoaderCombo.SelectedIndex = 0;
 
-            _ = LoadVersionsAsync();
+            _ = LoadVersionsAsync().ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    System.Diagnostics.Debug.WriteLine($"LoadVersionsAsync: {t.Exception?.InnerException?.Message}");
+            }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private async Task LoadVersionsAsync()
         {
-            try
+            // Show cached versions immediately for instant load
+            var cached = GameVersionCache.GetCached();
+            if (cached.Count > 0)
+            {
+                VersionCombo.ItemsSource = cached;
+                if (cached.Count > 0)
+                    VersionCombo.SelectedIndex = 0;
+            }
+
+            // Then refresh in background if needed
+            if (GameVersionCache.NeedsRefresh())
             {
                 CreateButton.IsEnabled = false;
-                var versions = await _launcher.GetAllVersionsAsync();
-                var releaseVersions = new List<string>();
-                foreach (var v in versions)
+                StatusText.Text = "Loading versions...";
+                StatusText.IsVisible = true;
+                try
                 {
-                    if (v.Type == "release" && !string.IsNullOrEmpty(v.Name))
-                        releaseVersions.Add(v.Name);
+                    var versions = await GameVersionCache.GetReleaseVersionsAsync();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        VersionCombo.ItemsSource = versions;
+                        if (versions.Count > 0)
+                            VersionCombo.SelectedIndex = 0;
+                        StatusText.IsVisible = false;
+                        CreateButton.IsEnabled = true;
+                    });
                 }
-                Dispatcher.UIThread.Post(() =>
+                catch (Exception ex)
                 {
-                    VersionCombo.ItemsSource = releaseVersions;
-                    if (releaseVersions.Count > 0)
-                        VersionCombo.SelectedIndex = 0;
-                    CreateButton.IsEnabled = true;
-                });
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (cached.Count == 0)
+                        {
+                            ErrorText.Text = $"Failed to load versions: {ex.Message}";
+                            ErrorText.IsVisible = true;
+                        }
+                        StatusText.IsVisible = false;
+                        CreateButton.IsEnabled = true;
+                    });
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    ErrorText.Text = $"Failed to load versions: {ex.Message}";
-                    ErrorText.IsVisible = true;
-                    CreateButton.IsEnabled = true;
-                });
+                CreateButton.IsEnabled = true;
+            }
+        }
+
+        private void LoaderCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            var isFabric = LoaderCombo.SelectedItem?.ToString() == "Fabric";
+            ModpackRow.IsVisible = isFabric;
+            NameInput.IsVisible = isFabric;
+
+            // Clear modpack selection when switching away from Fabric
+            if (!isFabric)
+            {
+                _modpackPath = null;
+                _modpackName = null;
+                ModpackPathBox.Text = string.Empty;
+                NameInput.Text = string.Empty;
             }
         }
 
@@ -62,18 +101,43 @@ namespace CitrineLauncher
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Select Modpack Zip",
+                Title = "Select Modpack",
                 AllowMultiple = false,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Modpack ZIP") { Patterns = new[] { "*.zip" } }
+                    new FilePickerFileType("Modpack files") { Patterns = new[] { "*.zip", "*.mrpack" } }
                 }
             });
 
             if (files.Count > 0)
             {
                 _modpackPath = files[0].TryGetLocalPath();
+                _modpackName = null;
                 ModpackPathBox.Text = _modpackPath ?? string.Empty;
+            }
+        }
+
+        private async void BrowseModrinthButton_Click(object? sender, RoutedEventArgs e)
+        {
+            var gameVersion = VersionCombo.SelectedItem?.ToString();
+            var dialog = new ModrinthBrowseDialog(gameVersion);
+            var result = await dialog.ShowDialog<ModrinthBrowseDialog.PickResult?>(this);
+            if (result is null) return;
+
+            _modpackPath = result.TempFilePath;
+            _modpackName = result.PackName;
+            ModpackPathBox.Text = result.PackName;
+
+            // Pre-fill name from pack title if user hasn't typed one
+            if (string.IsNullOrWhiteSpace(NameInput.Text))
+                NameInput.Text = result.PackName;
+
+            // Switch to the pack's game version if available
+            if (!string.IsNullOrEmpty(result.GameVersion))
+            {
+                var items = VersionCombo.ItemsSource as IList<string>;
+                if (items != null && items.Contains(result.GameVersion))
+                    VersionCombo.SelectedItem = result.GameVersion;
             }
         }
 
@@ -84,16 +148,9 @@ namespace CitrineLauncher
             ErrorText.IsVisible = false;
             StatusText.IsVisible = false;
 
-            var name = NameInput.Text?.Trim() ?? string.Empty;
             var gameVersion = VersionCombo.SelectedItem?.ToString() ?? string.Empty;
             var loaderStr = LoaderCombo.SelectedItem?.ToString() ?? "Vanilla";
-
-            if (string.IsNullOrEmpty(name))
-            {
-                ErrorText.Text = "Instance name cannot be empty.";
-                ErrorText.IsVisible = true;
-                return;
-            }
+            var loader = loaderStr == "Fabric" ? LoaderType.Fabric : LoaderType.Vanilla;
 
             if (string.IsNullOrEmpty(gameVersion))
             {
@@ -102,7 +159,21 @@ namespace CitrineLauncher
                 return;
             }
 
-            var loader = loaderStr == "Fabric" ? LoaderType.Fabric : LoaderType.Vanilla;
+            // Determine instance name
+            string name;
+            if (loader == LoaderType.Fabric)
+            {
+                // Use typed name, fall back to pack name, fall back to version
+                name = NameInput.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(name))
+                    name = _modpackName ?? gameVersion;
+            }
+            else
+            {
+                // Vanilla: auto-name from version
+                name = gameVersion;
+            }
+
             string loaderVersion = string.Empty;
 
             if (loader == LoaderType.Fabric)
@@ -112,7 +183,10 @@ namespace CitrineLauncher
                 StatusText.IsVisible = true;
                 try
                 {
-                    loaderVersion = await InstanceManager.GetLatestFabricLoaderVersionAsync();
+                    var fabricVersions = await InstanceManager.GetFabricLoaderVersionsAsync(gameVersion);
+                    if (fabricVersions.Count == 0)
+                        throw new InvalidOperationException($"No Fabric loader found for Minecraft {gameVersion}.");
+                    loaderVersion = fabricVersions[0];
                     StatusText.IsVisible = false;
                 }
                 catch (Exception ex)
@@ -142,11 +216,10 @@ namespace CitrineLauncher
                 {
                     ErrorText.Text = $"Modpack import failed: {result.Message}";
                     ErrorText.IsVisible = true;
-                    // Instance was created, so still close with it — user can fix manually
+                    // Instance was created — still close so user isn't stuck
                 }
                 else if (result.DetectedGameVersion != null && result.DetectedGameVersion != gameVersion)
                 {
-                    // Non-fatal: inform but still proceed
                     StatusText.Text = $"Note: pack targets {result.DetectedGameVersion}";
                     StatusText.IsVisible = true;
                 }
@@ -156,4 +229,3 @@ namespace CitrineLauncher
         }
     }
 }
-
