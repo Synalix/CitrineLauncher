@@ -123,11 +123,9 @@ namespace CitrineLauncher
                 AddMicrosoftButton.IsEnabled = false;
                 try
                 {
-                    // Bug 3: resolve any existing account first so the session is cached under its stable Id.
-                    // We do a temporary auth to discover the username, then re-auth under the correct id
-                    // if the account already exists, discarding the temp cache entry.
+                    // Authenticate once to discover the username
                     var tempAccount = new Account { Type = "Microsoft" };
-                    var (username, _) = await MicrosoftAuth.AuthenticateAsync(tempAccount.Id);
+                    var (username, session) = await MicrosoftAuth.AuthenticateAsync(tempAccount.Id);
                     if (!string.IsNullOrEmpty(username))
                     {
                         var existing = settings.Accounts.FirstOrDefault(a =>
@@ -136,9 +134,9 @@ namespace CitrineLauncher
 
                         if (existing != null)
                         {
-                            // Re-auth under the persisted account's stable id so the session cache is correct
-                            MicrosoftAuth.ClearCache(tempAccount.Id);
-                            await MicrosoftAuth.AuthenticateAsync(existing.Id);
+                            // Re-key the cache from temp account to existing account,
+                            // reusing the session we just got instead of re-authenticating
+                            MicrosoftAuth.ReKeyCache(tempAccount.Id, existing.Id);
                         }
                         else
                         {
@@ -186,6 +184,23 @@ namespace CitrineLauncher
                         FolderErrorLabel.IsVisible = true;
                         return;
                     }
+
+                    var oldPath = settings.MinecraftPath;
+                    if (!string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Migrate existing data to new path
+                        try
+                        {
+                            MigrateData(oldPath, newPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            FolderErrorLabel.Text = $"Failed to migrate data: {ex.Message}";
+                            FolderErrorLabel.IsVisible = true;
+                            return;
+                        }
+                    }
+
                     FolderErrorLabel.IsVisible = false;
                     settings.MinecraftPath = newPath;
                     FolderPathTextBlock.Text = newPath;
@@ -210,6 +225,42 @@ namespace CitrineLauncher
 
             // Close button
             CloseButton.Click += (s, e) => CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private static void MigrateData(string fromPath, string toPath)
+        {
+            if (!System.IO.Directory.Exists(fromPath)) return;
+            if (System.IO.Directory.Exists(toPath)) return;
+
+            System.IO.Directory.CreateDirectory(toPath);
+
+            var instancesSrc = System.IO.Path.Combine(fromPath, "instances");
+            if (System.IO.Directory.Exists(instancesSrc))
+                CopyDirectory(instancesSrc, System.IO.Path.Combine(toPath, "instances"));
+
+            var versionsSrc = System.IO.Path.Combine(fromPath, "versions");
+            if (System.IO.Directory.Exists(versionsSrc))
+                CopyDirectory(versionsSrc, System.IO.Path.Combine(toPath, "versions"));
+
+            var skinsSrc = System.IO.Path.Combine(fromPath, "citrine-skins");
+            if (System.IO.Directory.Exists(skinsSrc))
+                CopyDirectory(skinsSrc, System.IO.Path.Combine(toPath, "citrine-skins"));
+
+            var authlibSrc = System.IO.Path.Combine(fromPath, "authlib-injector.jar");
+            if (System.IO.File.Exists(authlibSrc))
+                System.IO.File.Copy(authlibSrc, System.IO.Path.Combine(toPath, "authlib-injector.jar"), overwrite: true);
+        }
+
+        private static void CopyDirectory(string src, string dst)
+        {
+            System.IO.Directory.CreateDirectory(dst);
+            foreach (var file in System.IO.Directory.GetFiles(src, "*", System.IO.SearchOption.AllDirectories))
+            {
+                var relative = System.IO.Path.GetRelativePath(src, file);
+                var destFile = System.IO.Path.Combine(dst, relative);
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(destFile)!);
+                System.IO.File.Copy(file, destFile, overwrite: true);
+            }
         }
 
         private void UpdateRamVisibility()
@@ -293,9 +344,11 @@ namespace CitrineLauncher
         {
             if (AccountsList.SelectedItem is Account selectedAccount)
             {
-                // Bug 2: unregister from skin server before removing
+                // Unregister from skin server before removing
                 if (selectedAccount.Type == "Offline")
                     OfflineSkinServer.Shared.Unregister(selectedAccount);
+                else if (selectedAccount.Type == "Microsoft")
+                    MicrosoftAuth.ClearCache(selectedAccount.Id);
 
                 if (Settings.Instance.RemoveAccount(selectedAccount))
                 {

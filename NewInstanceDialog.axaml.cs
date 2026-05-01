@@ -25,37 +25,59 @@ namespace CitrineLauncher
             LoaderCombo.ItemsSource = new[] { "Vanilla", "Fabric" };
             LoaderCombo.SelectedIndex = 0;
 
-            _ = LoadVersionsAsync();
+            _ = LoadVersionsAsync().ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    System.Diagnostics.Debug.WriteLine($"LoadVersionsAsync: {t.Exception?.InnerException?.Message}");
+            }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
         }
 
         private async Task LoadVersionsAsync()
         {
-            try
+            // Show cached versions immediately for instant load
+            var cached = GameVersionCache.GetCached();
+            if (cached.Count > 0)
+            {
+                VersionCombo.ItemsSource = cached;
+                if (cached.Count > 0)
+                    VersionCombo.SelectedIndex = 0;
+            }
+
+            // Then refresh in background if needed
+            if (GameVersionCache.NeedsRefresh())
             {
                 CreateButton.IsEnabled = false;
-                var versions = await _launcher.GetAllVersionsAsync();
-                var releaseVersions = new List<string>();
-                foreach (var v in versions)
+                StatusText.Text = "Loading versions...";
+                StatusText.IsVisible = true;
+                try
                 {
-                    if (v.Type == "release" && !string.IsNullOrEmpty(v.Name))
-                        releaseVersions.Add(v.Name);
+                    var versions = await GameVersionCache.GetReleaseVersionsAsync();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        VersionCombo.ItemsSource = versions;
+                        if (versions.Count > 0)
+                            VersionCombo.SelectedIndex = 0;
+                        StatusText.IsVisible = false;
+                        CreateButton.IsEnabled = true;
+                    });
                 }
-                Dispatcher.UIThread.Post(() =>
+                catch (Exception ex)
                 {
-                    VersionCombo.ItemsSource = releaseVersions;
-                    if (releaseVersions.Count > 0)
-                        VersionCombo.SelectedIndex = 0;
-                    CreateButton.IsEnabled = true;
-                });
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (cached.Count == 0)
+                        {
+                            ErrorText.Text = $"Failed to load versions: {ex.Message}";
+                            ErrorText.IsVisible = true;
+                        }
+                        StatusText.IsVisible = false;
+                        CreateButton.IsEnabled = true;
+                    });
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    ErrorText.Text = $"Failed to load versions: {ex.Message}";
-                    ErrorText.IsVisible = true;
-                    CreateButton.IsEnabled = true;
-                });
+                CreateButton.IsEnabled = true;
             }
         }
 

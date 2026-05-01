@@ -13,6 +13,12 @@ namespace CitrineLauncher.Handlers
     {
         public static readonly InstanceManager Instance = new InstanceManager();
 
+        private static readonly HttpClient _http = new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } },
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
         private static string InstancesRoot => Path.Combine(
             Settings.Instance.MinecraftPath, "instances");
 
@@ -104,48 +110,85 @@ namespace CitrineLauncher.Handlers
         // Returns latest stable Fabric loader version from Fabric meta API
         public static async Task<string> GetLatestFabricLoaderVersionAsync()
         {
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("User-Agent", "CitrineLauncher/1.0");
-            var json = await http.GetStringAsync("https://meta.fabricmc.net/v2/versions/loader");
-            using var doc = JsonDocument.Parse(json);
-            // Array of loader versions; first is latest
-            var first = doc.RootElement.EnumerateArray().First();
-            return first.GetProperty("version").GetString() ?? string.Empty;
+            try
+            {
+                var json = await _http.GetStringAsync("https://meta.fabricmc.net/v2/versions/loader");
+                using var doc = JsonDocument.Parse(json);
+                var first = doc.RootElement.EnumerateArray().FirstOrDefault();
+                if (first.ValueKind == JsonValueKind.Undefined)
+                    throw new InvalidOperationException("Fabric API returned empty version list");
+                return first.TryGetProperty("version", out var ver) ? ver.GetString() ?? string.Empty : string.Empty;
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException($"Failed to fetch Fabric versions: {ex.Message}", ex);
+            }
         }
 
         // Returns Fabric loader versions compatible with a given game version
         public static async Task<List<string>> GetFabricLoaderVersionsAsync(string gameVersion)
         {
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("User-Agent", "CitrineLauncher/1.0");
-            var json = await http.GetStringAsync($"https://meta.fabricmc.net/v2/versions/loader/{gameVersion}");
-            using var doc = JsonDocument.Parse(json);
-            var versions = new List<string>();
-            foreach (var el in doc.RootElement.EnumerateArray())
+            try
             {
-                var v = el.GetProperty("loader").GetProperty("version").GetString();
-                if (!string.IsNullOrEmpty(v)) versions.Add(v);
+                var json = await _http.GetStringAsync($"https://meta.fabricmc.net/v2/versions/loader/{gameVersion}");
+                using var doc = JsonDocument.Parse(json);
+                var versions = new List<string>();
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (!el.TryGetProperty("loader", out var loader)) continue;
+                    var v = loader.TryGetProperty("version", out var ver) ? ver.GetString() : null;
+                    if (!string.IsNullOrEmpty(v)) versions.Add(v);
+                }
+                return versions;
             }
-            return versions;
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException($"Failed to fetch Fabric versions for {gameVersion}: {ex.Message}", ex);
+            }
         }
 
         // Downloads and installs the Fabric profile JSON into the instance's minecraft path
+        // Safe for concurrent calls - checks if already installed first
         public static async Task InstallFabricAsync(string gameVersion, string loaderVersion, string minecraftPath)
         {
-            // Fabric provides a ready-made version JSON via its meta API
-            var url = $"https://meta.fabricmc.net/v2/versions/loader/{gameVersion}/{loaderVersion}/profile/json";
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("User-Agent", "CitrineLauncher/1.0");
-            var profileJson = await http.GetStringAsync(url);
+            // Resolve the version ID first to check if already installed
+            string profileJson;
+            string versionId;
+            try
+            {
+                var url = $"https://meta.fabricmc.net/v2/versions/loader/{gameVersion}/{loaderVersion}/profile/json";
+                profileJson = await _http.GetStringAsync(url);
 
-            // The version id from the profile JSON
-            using var doc = JsonDocument.Parse(profileJson);
-            var versionId = doc.RootElement.GetProperty("id").GetString()!;
+                using var doc = JsonDocument.Parse(profileJson);
+                if (!doc.RootElement.TryGetProperty("id", out var idProp))
+                    throw new InvalidOperationException($"Fabric profile JSON missing required 'id' field for game {gameVersion}");
+                versionId = idProp.GetString()!;
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException($"Failed to fetch Fabric profile from meta.fabricmc.net: {ex.Message}", ex);
+            }
+            catch (InvalidOperationException) { throw; }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to parse Fabric profile: {ex.Message}", ex);
+            }
 
-            // Write profile JSON to <minecraftPath>/versions/<versionId>/<versionId>.json
-            var versionDir = Path.Combine(minecraftPath, "versions", versionId);
-            Directory.CreateDirectory(versionDir);
-            File.WriteAllText(Path.Combine(versionDir, $"{versionId}.json"), profileJson);
+            // Check if already installed (race condition fix)
+            var versionFile = Path.Combine(minecraftPath, "versions", versionId, $"{versionId}.json");
+            if (File.Exists(versionFile))
+                return;
+
+            try
+            {
+                var versionDir = Path.Combine(minecraftPath, "versions", versionId);
+                Directory.CreateDirectory(versionDir);
+                File.WriteAllText(versionFile, profileJson);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to write Fabric profile to {minecraftPath}: {ex.Message}", ex);
+            }
         }
     }
 }

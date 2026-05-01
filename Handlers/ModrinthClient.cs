@@ -9,14 +9,16 @@ using System.Threading.Tasks;
 namespace CitrineLauncher.Handlers
 {
     /// <summary>
-    /// Thin wrapper around the Modrinth v2 API for searching and downloading modpacks.
+    /// Thin wrapper around the Modrinth v3 API for searching and downloading modpacks.
     /// </summary>
     public static class ModrinthClient
     {
-        private static readonly HttpClient _http = new HttpClient
+        private static readonly HttpClient _http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All })
         {
             DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } }
         };
+
+        private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(30);
 
         private const string BaseUrl = "https://api.modrinth.com/v2";
 
@@ -47,14 +49,13 @@ namespace CitrineLauncher.Handlers
             int limit = 20,
             CancellationToken ct = default)
         {
-            // Build facets: always filter to modpack project type
-            string facets;
-            if (!string.IsNullOrEmpty(gameVersion))
-                facets = $"[[\"project_type:modpack\"],[\"versions:{gameVersion}\"]]";
-            else
-                facets = "[[\"project_type:modpack\"]]";
+            // facets: outer arrays are ANDed, inner arrays are ORed
+            string facets = !string.IsNullOrEmpty(gameVersion)
+                ? $"[[\"project_type:modpack\"],[\"versions:{gameVersion}\"]]"
+                : "[[\"project_type:modpack\"]]";
 
             var url = $"{BaseUrl}/search?query={Uri.EscapeDataString(query)}&facets={Uri.EscapeDataString(facets)}&limit={limit}&index=relevance";
+
             var json = await _http.GetStringAsync(url, ct);
 
             using var doc = JsonDocument.Parse(json);
@@ -63,13 +64,14 @@ namespace CitrineLauncher.Handlers
 
             foreach (var hit in hits.EnumerateArray())
             {
-                var id = hit.GetProperty("project_id").GetString() ?? string.Empty;
-                var slug = hit.GetProperty("slug").GetString() ?? string.Empty;
-                var title = hit.GetProperty("title").GetString() ?? string.Empty;
-                var desc = hit.GetProperty("description").GetString() ?? string.Empty;
+                var id = hit.TryGetProperty("project_id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+                var slug = hit.TryGetProperty("slug", out var slugEl) ? slugEl.GetString() ?? string.Empty : string.Empty;
+                var title = hit.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? string.Empty : string.Empty;
+                var desc = hit.TryGetProperty("description", out var descEl) ? descEl.GetString() ?? string.Empty : string.Empty;
                 var icon = hit.TryGetProperty("icon_url", out var iconEl) ? iconEl.GetString() : null;
-                var downloads = hit.GetProperty("downloads").GetInt32();
+                var downloads = hit.TryGetProperty("downloads", out var dlEl) ? dlEl.GetInt32() : 0;
 
+                // v2 search hits use "versions", not "game_versions"
                 var gameVersions = new List<string>();
                 if (hit.TryGetProperty("versions", out var versionsEl))
                     foreach (var v in versionsEl.EnumerateArray())
@@ -90,9 +92,9 @@ namespace CitrineLauncher.Handlers
             string? gameVersion = null,
             CancellationToken ct = default)
         {
-            var url = $"{BaseUrl}/project/{projectId}/version";
+            var url = $"{BaseUrl}/project/{Uri.EscapeDataString(projectId)}/version";
             if (!string.IsNullOrEmpty(gameVersion))
-                url += $"?game_versions=[\"{gameVersion}\"]";
+                url += $"?game_versions={Uri.EscapeDataString($"[\"{gameVersion}\"]")}";
 
             var json = await _http.GetStringAsync(url, ct);
             using var doc = JsonDocument.Parse(json);
@@ -101,17 +103,19 @@ namespace CitrineLauncher.Handlers
             // First element is the latest
             foreach (var ver in arr.EnumerateArray())
             {
-                var versionId = ver.GetProperty("id").GetString() ?? string.Empty;
-                var versionNumber = ver.GetProperty("version_number").GetString() ?? string.Empty;
+                if (!ver.TryGetProperty("id", out var idEl)) continue;
+                var versionId = idEl.GetString() ?? string.Empty;
+                if (!ver.TryGetProperty("version_number", out var vnEl)) continue;
+                var versionNumber = vnEl.GetString() ?? string.Empty;
 
-                // Pick the first .mrpack file
                 if (!ver.TryGetProperty("files", out var filesEl)) continue;
                 foreach (var file in filesEl.EnumerateArray())
                 {
-                    var filename = file.GetProperty("filename").GetString() ?? string.Empty;
+                    if (!file.TryGetProperty("filename", out var fnEl)) continue;
+                    var filename = fnEl.GetString() ?? string.Empty;
                     if (!filename.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase)) continue;
 
-                    var downloadUrl = file.GetProperty("url").GetString() ?? string.Empty;
+                    var downloadUrl = file.TryGetProperty("url", out var urlEl) ? urlEl.GetString() ?? string.Empty : string.Empty;
 
                     // Resolve actual game version from the version's game_versions array
                     string resolvedGameVersion = gameVersion ?? string.Empty;

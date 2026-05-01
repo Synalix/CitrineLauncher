@@ -149,9 +149,24 @@ namespace CitrineLauncher
                 {
                     var session = await MicrosoftAuth.GetSessionAsync(account.Id);
                     if (ct.IsCancellationRequested) return;
+
+                    // Validate session belongs to the selected account
+                    if (!string.Equals(session.Username, account.Username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MicrosoftAuth.ClearCache(account.Id);
+                        session = await MicrosoftAuth.GetSessionAsync(account.Id);
+                    }
+                    if (ct.IsCancellationRequested) return;
+
                     _currentProfile = await SkinApiHandler.GetProfileAsync(session.AccessToken, ct);
                     if (ct.IsCancellationRequested) return;
                     _cachedProfileKey = profileKey;
+                }
+
+                if (_currentProfile == null)
+                {
+                    ShowSkinError("Profile data unavailable");
+                    return;
                 }
 
                 // Derive all state before touching the UI
