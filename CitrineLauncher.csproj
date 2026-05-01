@@ -10,7 +10,7 @@
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <InformationalVersion>1.2.2</InformationalVersion>
+    <InformationalVersion>1.2.3</InformationalVersion>
     <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
