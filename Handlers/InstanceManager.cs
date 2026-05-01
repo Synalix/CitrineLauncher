@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CitrineLauncher.Handlers
@@ -18,6 +19,9 @@ namespace CitrineLauncher.Handlers
             DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } },
             Timeout = TimeSpan.FromSeconds(30)
         };
+
+        // Guards concurrent Fabric profile writes to prevent TOCTOU races
+        private static readonly SemaphoreSlim _fabricInstallLock = new(1, 1);
 
         private static string InstancesRoot => Path.Combine(
             Settings.Instance.MinecraftPath, "instances");
@@ -174,20 +178,21 @@ namespace CitrineLauncher.Handlers
                 throw new InvalidOperationException($"Failed to parse Fabric profile: {ex.Message}", ex);
             }
 
-            // Check if already installed (race condition fix)
+            // Atomically check-and-install to prevent TOCTOU races between concurrent calls
             var versionFile = Path.Combine(minecraftPath, "versions", versionId, $"{versionId}.json");
-            if (File.Exists(versionFile))
-                return;
-
+            await _fabricInstallLock.WaitAsync();
             try
             {
+                if (File.Exists(versionFile))
+                    return;
+
                 var versionDir = Path.Combine(minecraftPath, "versions", versionId);
                 Directory.CreateDirectory(versionDir);
                 File.WriteAllText(versionFile, profileJson);
             }
-            catch (Exception ex)
+            finally
             {
-                throw new InvalidOperationException($"Failed to write Fabric profile to {minecraftPath}: {ex.Message}", ex);
+                _fabricInstallLock.Release();
             }
         }
     }

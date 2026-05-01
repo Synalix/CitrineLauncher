@@ -20,6 +20,8 @@ namespace CitrineLauncher
         private readonly string? _gameVersion;
         private CancellationTokenSource? _cts;
         private DispatcherTimer? _debounceTimer;
+        private int _searchVersion;
+        private int _searchRunning;
 
         public record PickResult(string TempFilePath, string PackName, string? GameVersion);
 
@@ -50,50 +52,65 @@ namespace CitrineLauncher
             }
         }
 
-        private void SearchButton_Click(object? sender, RoutedEventArgs e) => RunSearch();
+        private void SearchButton_Click(object? sender, RoutedEventArgs e)
+        {
+            _debounceTimer?.Stop();
+            RunSearch();
+        }
 
         private void RunSearch()
         {
             var query = SearchBox.Text?.Trim() ?? string.Empty;
-            _ = SearchAsync(query);
+            var version = Interlocked.Increment(ref _searchVersion);
+            _ = SearchAsync(query, version);
         }
 
-        private async Task SearchAsync(string query)
+        private async Task SearchAsync(string query, int version)
         {
-            _cts?.Cancel();
-            _cts = new CancellationTokenSource();
-            var ct = _cts.Token;
-
-            ImportButton.IsEnabled = false;
-            ResultsList.ItemsSource = null;
-            StatusText.Text = "Searching...";
-            StatusText.IsVisible = true;
-            SearchButton.IsEnabled = false;
-
+            if (Interlocked.CompareExchange(ref _searchRunning, 1, 0) != 0)
+                return; // already running
             try
             {
-                var results = await ModrinthClient.SearchAsync(query, _gameVersion, ct: ct);
-                if (ct.IsCancellationRequested) return;
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
+                var ct = _cts.Token;
 
-                var items = new List<ModrinthResultItem>();
-                foreach (var r in results)
-                    items.Add(new ModrinthResultItem(r));
-
-                ResultsList.ItemsSource = items;
-                StatusText.Text = results.Count == 0 ? "No results found." : string.Empty;
-                StatusText.IsVisible = results.Count == 0;
-
-                _ = LoadIconsAsync(items, ct);
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Search failed: {ex.Message}";
+                ImportButton.IsEnabled = false;
+                ResultsList.ItemsSource = null;
+                StatusText.Text = "Searching...";
                 StatusText.IsVisible = true;
+                SearchButton.IsEnabled = false;
+
+                try
+                {
+                    var results = await ModrinthClient.SearchAsync(query, _gameVersion, ct: ct);
+                    if (ct.IsCancellationRequested) return;
+
+                    var items = new List<ModrinthResultItem>();
+                    foreach (var r in results)
+                        items.Add(new ModrinthResultItem(r));
+
+                    ResultsList.ItemsSource = items;
+                    StatusText.Text = results.Count == 0 ? "No results found." : string.Empty;
+                    StatusText.IsVisible = results.Count == 0;
+
+                    _ = LoadIconsAsync(items, ct);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Search failed: {ex.Message}";
+                    StatusText.IsVisible = true;
+                }
+                finally
+                {
+                    SearchButton.IsEnabled = true;
+                }
             }
             finally
             {
-                SearchButton.IsEnabled = true;
+                Interlocked.Exchange(ref _searchRunning, 0);
             }
         }
 

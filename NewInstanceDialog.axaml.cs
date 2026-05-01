@@ -39,8 +39,7 @@ namespace CitrineLauncher
             if (cached.Count > 0)
             {
                 VersionCombo.ItemsSource = cached;
-                if (cached.Count > 0)
-                    VersionCombo.SelectedIndex = 0;
+                VersionCombo.SelectedIndex = 0;
             }
 
             // Then refresh in background if needed

@@ -59,10 +59,27 @@ namespace CitrineLauncher.Handlers
         }
 
         // ---- shared singleton ----
-        public static readonly OfflineSkinServer Shared = new();
+        // Backing field supports lazy re-creation after disposal
+        private static OfflineSkinServer? _shared = new();
+        private static readonly object _sharedLock = new();
+        public static OfflineSkinServer Shared
+        {
+            get
+            {
+                if (_shared != null && !_shared._disposed)
+                    return _shared;
+
+                lock (_sharedLock)
+                {
+                    if (_shared == null || _shared._disposed)
+                        _shared = new OfflineSkinServer();
+                    return _shared;
+                }
+            }
+        }
 
         // ---- server state ----
-        private readonly HttpListener _listener;
+        private HttpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly Dictionary<string, Account> _byUuid = new(StringComparer.OrdinalIgnoreCase);
         private bool _disposed;
@@ -76,7 +93,11 @@ namespace CitrineLauncher.Handlers
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://localhost:{Port}/");
             _listener.Start();
-            _ = RunAsync(_cts.Token);
+            _ = RunAsync(_cts.Token).ContinueWith(t =>
+            {
+                if (t.IsFaulted && !_disposed)
+                    System.Diagnostics.Debug.WriteLine($"OfflineSkinServer loop faulted: {t.Exception?.InnerException?.Message}");
+            }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
         /// <summary>Register (or update) an offline account so its skin is served.</summary>
@@ -100,7 +121,14 @@ namespace CitrineLauncher.Handlers
             {
                 HttpListenerContext ctx;
                 try { ctx = await _listener.GetContextAsync(); }
-                catch { break; }
+                catch (ObjectDisposedException) { break; }
+                catch (HttpListenerException) { break; }
+                catch (InvalidOperationException) { break; }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"OfflineSkinServer: unexpected error in listener loop: {ex.GetType().Name}: {ex.Message}");
+                    break;
+                }
                 _ = Task.Run(async () =>
                 {
                     try { await HandleAsync(ctx); }

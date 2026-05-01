@@ -88,6 +88,7 @@ namespace CitrineLauncher
             {
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
                 _particleCts?.Cancel();
+                _particleCts?.Dispose();
                 // Unsubscribe game process event so it doesn't post to a dead window
                 if (currentGameProcess != null)
                     currentGameProcess.Exited -= GameProcess_Exited;

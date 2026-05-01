@@ -24,45 +24,51 @@ namespace CitrineLauncher.Handlers
         private const string SteveSkinDataUrl =
             "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA60lEQVR42u3ZMQrCMBSA4ZzBK7iIoyCiuLmLq97ApXMP0UO4uXoKr/XEIZAUTFqToi/5f3hDaVPSb+gSYyJd9gsJjSk9AAAAAAAAACgYwH7I89Z6E/vw/ny7HgANAP17Q54Zul4FgM3es1UFsD7fPYD3dRUAnzYfew6AUn6CxQPsjp24M3Z9DCh1f7nfBwAAAOQFOFwfEprU/eV+HwAAAOC33DbiDgAAAFAXwGY+E3fGrl+dOgnNr/cHAAAAEBERERERERGZvz5cBQAAAOoCmPzgAwAAAJi03IerAAAAgK5SDy/VH34CAIBugBdVOAQjOMARKAAAAABJRU5ErkJggg==";
 
-        public static string Build() => $$"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { background: #0D0D0D; display: flex; justify-content: center;
-                     align-items: center; height: 100vh; overflow: hidden; }
-              canvas { display: block; }
-            </style>
-            </head>
-            <body>
-            <canvas id="skin_canvas"></canvas>
-            <script>{{_js.Value}}</script>
-            <script>
-              var STEVE_SKIN = "{{SteveSkinDataUrl}}";
-              var viewer = new skinview3d.SkinViewer({
-                canvas: document.getElementById("skin_canvas"),
-                width: window.innerWidth,
-                height: window.innerHeight
-              });
-              viewer.animation = new skinview3d.WalkingAnimation();
-              viewer.controls.enabled = true;
-              window.addEventListener("resize", function() {
-                viewer.setSize(window.innerWidth, window.innerHeight);
-              });
-              function setSkin(url, model) {
-                viewer.loadSkin(url, { model: model || "default" });
-              }
-              function setCape(url) { viewer.loadCape(url); }
-              function clearCape() { viewer.loadCape(null); }
-              function loadDefault() {
-                viewer.loadSkin(STEVE_SKIN, { model: "default" });
-              }
-            </script>
-            </body>
-            </html>
-            """;
+        /// <summary>
+        /// Builds the HTML page using string concatenation rather than raw string
+        /// interpolation to avoid conflicts with braces in embedded JavaScript code.
+        /// </summary>
+        public static string Build()
+        {
+            var js = _js.Value;
+            return "<!DOCTYPE html>\n" +
+                "<html>\n" +
+                "<head>\n" +
+                "<meta charset=\"utf-8\">\n" +
+                "<style>\n" +
+                "  * { margin: 0; padding: 0; box-sizing: border-box; }\n" +
+                "  body { background: #0D0D0D; display: flex; justify-content: center;\n" +
+                "         align-items: center; height: 100vh; overflow: hidden; }\n" +
+                "  canvas { display: block; }\n" +
+                "</style>\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "<canvas id=\"skin_canvas\"></canvas>\n" +
+                "<script>" + js + "</script>\n" +
+                "<script>\n" +
+                "  var STEVE_SKIN = \"" + SteveSkinDataUrl + "\";\n" +
+                "  var viewer = new skinview3d.SkinViewer({\n" +
+                "    canvas: document.getElementById(\"skin_canvas\"),\n" +
+                "    width: window.innerWidth,\n" +
+                "    height: window.innerHeight\n" +
+                "  });\n" +
+                "  viewer.animation = new skinview3d.WalkingAnimation();\n" +
+                "  viewer.controls.enabled = true;\n" +
+                "  window.addEventListener(\"resize\", function() {\n" +
+                "    viewer.setSize(window.innerWidth, window.innerHeight);\n" +
+                "  });\n" +
+                "  function setSkin(url, model) {\n" +
+                "    viewer.loadSkin(url, { model: model || \"default\" });\n" +
+                "  }\n" +
+                "  function setCape(url) { viewer.loadCape(url); }\n" +
+                "  function clearCape() { viewer.loadCape(null); }\n" +
+                "  function loadDefault() {\n" +
+                "    viewer.loadSkin(STEVE_SKIN, { model: \"default\" });\n" +
+                "  }\n" +
+                "</script>\n" +
+                "</body>\n" +
+                "</html>";
+        }
 
         public static string WriteTempFile()
         {

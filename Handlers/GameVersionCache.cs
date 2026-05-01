@@ -61,7 +61,11 @@ namespace CitrineLauncher.Handlers
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"GameVersionCache: fetch failed {ex.Message}");
-                return _releaseVersions ?? new List<string>();
+                // Fallback to in-memory cache, then settings cache
+                if (_releaseVersions != null && _releaseVersions.Count > 0)
+                    return _releaseVersions;
+                var cached = Settings.Instance.CachedGameVersions;
+                return cached ?? new List<string>();
             }
             finally
             {

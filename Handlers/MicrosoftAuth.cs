@@ -68,8 +68,9 @@ namespace CitrineLauncher.Handlers
         /// </summary>
         public static void ReKeyCache(string fromAccountId, string toAccountId)
         {
+            if (fromAccountId == toAccountId) return;
             if (_cache.TryRemove(fromAccountId, out var entry))
-                _cache[toAccountId] = entry;
+                _cache.TryAdd(toAccountId, entry);
         }
 
         /// <summary>

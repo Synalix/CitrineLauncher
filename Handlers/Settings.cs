@@ -261,7 +261,7 @@ namespace CitrineLauncher.Handlers
 
         public IDisposable SuppressSave()
         {
-            _saveSuppressed = Math.Max(0, _saveSuppressed + 1);
+            _saveSuppressed++;
             return new SaveSuppressor(this);
         }
 
@@ -274,7 +274,8 @@ namespace CitrineLauncher.Handlers
             {
                 if (_disposed) return;
                 _disposed = true;
-                _settings._saveSuppressed = Math.Max(0, _settings._saveSuppressed - 1);
+                if (_settings._saveSuppressed > 0)
+                    _settings._saveSuppressed--;
             }
         }
 
@@ -315,8 +316,6 @@ namespace CitrineLauncher.Handlers
                 var settings = TryLoadFromPath(path);
                 if (settings != null)
                 {
-                    // Mark as loading so setters don't trigger Save() during initialization
-                    settings._isLoading = false;
                     LauncherConfig.Save(settings.MinecraftPath);
                     return settings;
                 }

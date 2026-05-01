@@ -300,6 +300,10 @@ namespace CitrineLauncher
             AccountsSection.IsVisible   = sectionName == "Accounts";
             AppearanceSection.IsVisible = sectionName == "Appearance";
             PerformanceSection.IsVisible = sectionName == "Performance";
+
+            // Reset folder edit mode when switching sections so the UI doesn't stay in edit state
+            if (_isEditingFolder)
+                SetFolderEditMode(false);
         }
 
         // Bug fix #9: made async, uses await instead of ContinueWith

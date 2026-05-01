@@ -13,12 +13,13 @@ namespace CitrineLauncher.Handlers
     /// </summary>
     public static class ModrinthClient
     {
+        private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(30);
+
         private static readonly HttpClient _http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All })
         {
-            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } }
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } },
+            Timeout = _defaultTimeout
         };
-
-        private static readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(30);
 
         private const string BaseUrl = "https://api.modrinth.com/v2";
 

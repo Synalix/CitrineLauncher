@@ -56,6 +56,11 @@ namespace CitrineLauncher
             string username = Handlers.Settings.Instance.Username;
 
             if (string.IsNullOrEmpty(username) || cbInstances.SelectedItem is not GameInstance instance) return;
+            if (launcher == null)
+            {
+                Debug.WriteLine("Launch aborted: launcher not initialized");
+                return;
+            }
             btnLaunch.IsEnabled = false;
 
             try
@@ -76,7 +81,7 @@ namespace CitrineLauncher
                 }
 
                 lblStatus.Text = "Installing game files...";
-                await launcher!.InstallAsync(instance.ResolvedVersion);
+                await launcher.InstallAsync(instance.ResolvedVersion);
 
                 var account = settings.Accounts.FirstOrDefault(a =>
                     string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase));
@@ -90,6 +95,14 @@ namespace CitrineLauncher
                     {
                         Handlers.MicrosoftAuth.ClearCache(account.Id);
                         cached = await Handlers.MicrosoftAuth.GetSessionAsync(account.Id);
+                        // Validate the re-authenticated session still matches
+                        if (!string.Equals(cached.Username, username, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Debug.WriteLine($"Launch aborted: re-authenticated session '{cached.Username}' does not match selected account '{username}'");
+                            lblStatus.Text = "Launch Failed — account mismatch";
+                            btnLaunch.IsEnabled = true;
+                            return;
+                        }
                     }
                     session = cached;
                 }
@@ -105,19 +118,34 @@ namespace CitrineLauncher
 
                 // Build extra JVM args — inject authlib-injector for offline accounts with a skin
                 var extraJvmArgs = new System.Collections.Generic.List<MArgument>();
-                if (account?.Type == "Offline" && !string.IsNullOrEmpty(account.SkinPath) && File.Exists(account.SkinPath))
+                if (account?.Type == "Offline")
                 {
-                    try
+                    // If no explicit SkinPath but a fallback exists, use it
+                    if (!string.IsNullOrEmpty(account.SkinPath) && !File.Exists(account.SkinPath))
                     {
-                        lblStatus.Text = "Downloading skin agent...";
-                        await OfflineSkinServer.EnsureJarAsync();
-                        OfflineSkinServer.Shared.Register(account);
-                        var agentArg = $"-javaagent:{OfflineSkinServer.JarPath}={OfflineSkinServer.Shared.BaseUrl}";
-                        extraJvmArgs.Add(new MArgument(agentArg));
+                        account.SkinPath = string.Empty;
                     }
-                    catch (Exception ex)
+                    if (string.IsNullOrEmpty(account.SkinPath))
                     {
-                        Debug.WriteLine($"Skin agent setup failed (continuing without it): {ex.Message}");
+                        var fallbackPath = Path.Combine(settings.MinecraftPath, "citrine-skins", $"{account.Username}.png");
+                        if (File.Exists(fallbackPath))
+                            account.SkinPath = fallbackPath;
+                    }
+
+                    if (!string.IsNullOrEmpty(account.SkinPath) && File.Exists(account.SkinPath))
+                    {
+                        try
+                        {
+                            lblStatus.Text = "Downloading skin agent...";
+                            await OfflineSkinServer.EnsureJarAsync();
+                            OfflineSkinServer.Shared.Register(account);
+                            var agentArg = $"-javaagent:{OfflineSkinServer.JarPath}={OfflineSkinServer.Shared.BaseUrl}";
+                            extraJvmArgs.Add(new MArgument(agentArg));
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Skin agent setup failed (continuing without it): {ex.Message}");
+                        }
                     }
                 }
 
@@ -130,11 +158,12 @@ namespace CitrineLauncher
                     ExtraJvmArguments = extraJvmArgs.Count > 0 ? extraJvmArgs : Enumerable.Empty<MArgument>(),
                     ExtraGameArguments = new MArgument[]
                     {
-                        new MArgument($"--gameDir \"{instance.InstanceDirectory}\"")
+                        new("--gameDir"),
+                        new(instance.InstanceDirectory)
                     }
                 };
 
-                var process = await launcher!.BuildProcessAsync(instance.ResolvedVersion, launchOptions);
+                var process = await launcher.BuildProcessAsync(instance.ResolvedVersion, launchOptions);
 
                 if (!settings.ShowConsole)
                 {
@@ -168,6 +197,7 @@ namespace CitrineLauncher
                 if (!IsLoaded) return;
                 lblStatus.Text = "Ready to Play";
                 btnLaunch.IsEnabled = true;
+                currentGameProcess?.Dispose();
                 currentGameProcess = null;
             });
         }

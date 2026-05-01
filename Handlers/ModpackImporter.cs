@@ -27,7 +27,7 @@ namespace CitrineLauncher.Handlers
             if (!File.Exists(zipPath))
                 return new ImportResult(false, $"File not found: {zipPath}");
 
-            var tempDir = Path.Combine(Path.GetTempPath(), "citrine_import_" + Guid.NewGuid().ToString("N")[..8]);
+            var tempDir = Path.Combine(Path.GetTempPath(), "citrine_import_" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(tempDir);

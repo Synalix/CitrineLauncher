@@ -120,6 +120,7 @@ namespace CitrineLauncher
             }
 
             _cts.Cancel();
+            _cts.Dispose();
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
 
@@ -300,6 +301,8 @@ namespace CitrineLauncher
                     account.SkinPath  = dest;
                     account.SkinModel = _currentModel;
                     Settings.Instance.Save();
+                    // Re-register with the skin server so the new skin is served in-game immediately
+                    OfflineSkinServer.Shared.Register(account);
                     SkinNameLabel.Text = Path.GetFileName(dest);
                 }
                 var dataUrl = await FileToDataUrl(filePath);
