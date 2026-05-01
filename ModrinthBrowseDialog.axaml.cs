@@ -97,7 +97,7 @@ namespace CitrineLauncher
             }
         }
 
-        private static readonly HttpClient _iconHttp = new HttpClient();
+        private static readonly HttpClient _iconHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
         private async Task LoadIconsAsync(List<ModrinthResultItem> items, CancellationToken ct)
         {

@@ -39,7 +39,10 @@ namespace CitrineLauncher
             // 2. Setup account list
             RefreshAccountList();
 
-            // 3. Setup events
+            // 3. Refresh game versions cache in background (daily)
+            _ = GameVersionCache.GetReleaseVersionsAsync();
+
+            // 4. Setup events
             btnSettings.Click += BtnSettings_Click;
             btnLaunch.Click += BtnLaunch_Click;
             btnFolder.Click += BtnFolder_Click;
@@ -139,7 +142,7 @@ namespace CitrineLauncher
 
             if (accounts.Length > 0)
             {
-                var match = accounts.FirstOrDefault(a => a.Username == savedUsername);
+                var match = accounts.FirstOrDefault(a => string.Equals(a.Username, savedUsername, StringComparison.OrdinalIgnoreCase));
                 var fallbackSelection = selectedAccount != null && accounts.Contains(selectedAccount)
                     ? selectedAccount
                     : match ?? accounts[0];

@@ -97,7 +97,6 @@ namespace CitrineLauncher
                 {
                     // Use the account's stable UUID so the skin server can identify it
                     var offlineUuid = account?.GetOrCreateOfflineUuid() ?? Guid.NewGuid().ToString("N");
-                    settings.Save();
                     session = new MSession(username, "access_token", offlineUuid)
                     {
                         UserType = "Mojang"
@@ -129,11 +128,9 @@ namespace CitrineLauncher
                     MinimumRamMb = settings.MinRam,
                     GameLauncherName = "CitrineLauncher",
                     ExtraJvmArguments = extraJvmArgs.Count > 0 ? extraJvmArgs : Enumerable.Empty<MArgument>(),
-                    // Per-instance game directory: mods/configs stay isolated per instance
-                    ExtraGameArguments = new CmlLib.Core.ProcessBuilder.MArgument[]
+                    ExtraGameArguments = new MArgument[]
                     {
-                        new("--gameDir"),
-                        new(instance.InstanceDirectory)
+                        new MArgument($"--gameDir \"{instance.InstanceDirectory}\"")
                     }
                 };
 

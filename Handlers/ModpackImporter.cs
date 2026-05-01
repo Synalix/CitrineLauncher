@@ -20,6 +20,7 @@ namespace CitrineLauncher.Handlers
 
         /// <summary>
         /// Import from a zip file. Extracts to a temp folder, then delegates to ImportFromFolder.
+        /// Handles both .zip and .mrpack (Modrinth modpack) formats.
         /// </summary>
         public static async Task<ImportResult> ImportFromZipAsync(string zipPath, GameInstance target)
         {
@@ -30,12 +31,14 @@ namespace CitrineLauncher.Handlers
             try
             {
                 Directory.CreateDirectory(tempDir);
+                
                 await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, tempDir, overwriteFiles: true));
+                
                 return await ImportFromFolderAsync(tempDir, target);
             }
             catch (Exception ex)
             {
-                return new ImportResult(false, $"Failed to extract zip: {ex.Message}");
+                return new ImportResult(false, $"Failed to extract modpack: {ex.Message}");
             }
             finally
             {
@@ -130,7 +133,8 @@ namespace CitrineLauncher.Handlers
 
         private static readonly HttpClient _http = new HttpClient
         {
-            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } }
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } },
+            Timeout = TimeSpan.FromSeconds(60)
         };
 
         private static async Task<ImportResult> ImportModrinthAsync(

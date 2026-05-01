@@ -18,6 +18,20 @@ namespace CitrineLauncher.Handlers
     /// </summary>
     public sealed class OfflineSkinServer : IDisposable
     {
+        // Used only for the large JAR download — long timeout is appropriate here.
+        private static readonly HttpClient _downloadHttp = new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher" } },
+            Timeout = TimeSpan.FromSeconds(120)
+        };
+
+        // Used for in-game skin texture fetches — short timeout to avoid blocking gameplay.
+        private static readonly HttpClient _http = new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher" } },
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+
         // ---- authlib-injector download ----
         private const string AutobuildUrl =
             "https://github.com/yushijinhun/authlib-injector/releases/download/v1.2.7/authlib-injector-1.2.7.jar";
@@ -30,10 +44,18 @@ namespace CitrineLauncher.Handlers
             if (File.Exists(JarPath)) return;
 
             Directory.CreateDirectory(Path.GetDirectoryName(JarPath)!);
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.Add("User-Agent", "CitrineLauncher");
-            var bytes = await http.GetByteArrayAsync(AutobuildUrl, ct);
-            await File.WriteAllBytesAsync(JarPath, bytes, ct);
+            var tmpPath = JarPath + ".tmp";
+            try
+            {
+                var bytes = await _downloadHttp.GetByteArrayAsync(AutobuildUrl, ct);
+                await File.WriteAllBytesAsync(tmpPath, bytes, ct);
+                File.Move(tmpPath, JarPath, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(tmpPath); } catch { }
+                throw;
+            }
         }
 
         // ---- shared singleton ----
@@ -79,7 +101,11 @@ namespace CitrineLauncher.Handlers
                 HttpListenerContext ctx;
                 try { ctx = await _listener.GetContextAsync(); }
                 catch { break; }
-                _ = Task.Run(() => HandleAsync(ctx), ct);
+                _ = Task.Run(async () =>
+                {
+                    try { await HandleAsync(ctx); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"HandleAsync error: {ex.Message}"); }
+                }, ct);
             }
         }
 

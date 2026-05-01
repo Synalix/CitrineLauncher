@@ -44,6 +44,10 @@ namespace CitrineLauncher.Handlers
         [JsonIgnore]
         private bool _isLoading = true;
 
+        // Suppresses Save() during batch operations
+        [JsonIgnore]
+        private int _saveSuppressed;
+
         private string _username = string.Empty;
         private int _maxRam = 2048;
         private int _minRam = 1024;
@@ -57,6 +61,8 @@ namespace CitrineLauncher.Handlers
         private string _minecraftPath = DefaultMinecraftPath;
         private List<Account> _accounts = new List<Account>();
         private string _lastVersion = string.Empty;
+        private List<string> _cachedGameVersions = new List<string>();
+        private long _gameVersionsCachedAt;
 
         public string Username
         {
@@ -144,6 +150,20 @@ namespace CitrineLauncher.Handlers
             set => SetProperty(ref _lastVersion, value);
         }
 
+        // Cached game versions fetched from Mojang - refreshed daily
+        public List<string> CachedGameVersions
+        {
+            get => _cachedGameVersions;
+            set => SetProperty(ref _cachedGameVersions, value);
+        }
+
+        // When versions were last cached (Unix timestamp)
+        public long GameVersionsCachedAt
+        {
+            get => _gameVersionsCachedAt;
+            set => SetProperty(ref _gameVersionsCachedAt, value);
+        }
+
         public List<Account> Accounts
         {
             // Null-guard: JsonSerializer.Deserialize bypasses the constructor, so _accounts
@@ -184,7 +204,22 @@ namespace CitrineLauncher.Handlers
         public string[] ThemeOptions { get; } = new[] { "Dark", "Light" };
 
         private static Settings? _instance;
-        public static Settings Instance => _instance ??= Load();
+        private static readonly object _lock = new object();
+        public static Settings Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_instance == null)
+                            _instance = Load();
+                    }
+                }
+                return _instance;
+            }
+        }
 
         public Settings() { }
 
@@ -205,8 +240,8 @@ namespace CitrineLauncher.Handlers
 
         public void Save()
         {
-            // Don't save while we're loading from disk
-            if (_isLoading) return;
+            // Don't save while we're loading from disk or saves are suppressed
+            if (_isLoading || _saveSuppressed > 0) return;
 
             try
             {
@@ -221,6 +256,25 @@ namespace CitrineLauncher.Handlers
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+            }
+        }
+
+        public IDisposable SuppressSave()
+        {
+            _saveSuppressed = Math.Max(0, _saveSuppressed + 1);
+            return new SaveSuppressor(this);
+        }
+
+        private class SaveSuppressor : IDisposable
+        {
+            private readonly Settings _settings;
+            private bool _disposed;
+            public SaveSuppressor(Settings s) => _settings = s;
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _settings._saveSuppressed = Math.Max(0, _settings._saveSuppressed - 1);
             }
         }
 

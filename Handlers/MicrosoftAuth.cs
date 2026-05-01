@@ -1,7 +1,7 @@
 using CmlLib.Core.Auth;
 using CmlLib.Core.Auth.Microsoft;
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 namespace CitrineLauncher.Handlers
@@ -12,7 +12,7 @@ namespace CitrineLauncher.Handlers
 
         // Keyed by stable Account.Id so each Microsoft account has its own session cache.
         private record CacheEntry(MSession Session, DateTime Expiry);
-        private static readonly Dictionary<string, CacheEntry> _cache = new();
+        private static readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
         private static readonly TimeSpan _cacheTtl = TimeSpan.FromMinutes(5);
 
         /// <summary>
@@ -53,13 +53,33 @@ namespace CitrineLauncher.Handlers
         /// <summary>Invalidates the cached session for a specific account (call on sign-out or re-auth).</summary>
         public static void ClearCache(string accountId)
         {
-            _cache.Remove(accountId);
+            _cache.TryRemove(accountId, out _);
         }
 
         /// <summary>Invalidates all cached sessions.</summary>
         public static void ClearAllCaches()
         {
             _cache.Clear();
+        }
+
+        /// <summary>
+        /// Re-keys a cached session from one account id to another.
+        /// Used when re-authing an existing account to avoid a second interactive login.
+        /// </summary>
+        public static void ReKeyCache(string fromAccountId, string toAccountId)
+        {
+            if (_cache.TryRemove(fromAccountId, out var entry))
+                _cache[toAccountId] = entry;
+        }
+
+        /// <summary>
+        /// Returns the cached username for validation, or null if not cached.
+        /// </summary>
+        public static string? GetCachedUsername(string accountId)
+        {
+            return _cache.TryGetValue(accountId, out var entry)
+                ? entry.Session.Username
+                : null;
         }
 
         private static void SetCache(string accountId, MSession session)

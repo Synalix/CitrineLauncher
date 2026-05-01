@@ -24,7 +24,7 @@ namespace CitrineLauncher.Models
         // The version string CmlLib should install/launch
         // For Vanilla: GameVersion. For Fabric: "fabric-loader-<LoaderVersion>-<GameVersion>"
         [JsonIgnore]
-        public string ResolvedVersion => Loader == LoaderType.Fabric && !string.IsNullOrEmpty(LoaderVersion)
+        public string ResolvedVersion => Loader == LoaderType.Fabric && !string.IsNullOrEmpty(LoaderVersion) && !string.IsNullOrEmpty(GameVersion)
             ? $"fabric-loader-{LoaderVersion}-{GameVersion}"
             : GameVersion;
 

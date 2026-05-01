@@ -41,7 +41,7 @@ namespace CitrineLauncher.Handlers
         private const string SkinsUrl   = "https://api.minecraftservices.com/minecraft/profile/skins";
         private const string CapesUrl   = "https://api.minecraftservices.com/minecraft/profile/capes/active";
 
-        private static readonly HttpClient _http = new();
+        private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
         private static HttpRequestMessage AuthRequest(HttpMethod method, string url, string accessToken)
         {
