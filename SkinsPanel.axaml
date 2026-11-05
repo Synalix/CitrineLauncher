@@ -5,14 +5,19 @@
              Background="#121212">
 
     <UserControl.Styles>
-        <StyleInclude Source="avares://CitrineLauncher/Styles/Shared.axaml"/>
+        <Style Selector="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
         <Style Selector="Button.secondary:disabled">
             <Setter Property="Opacity" Value="0.4"/>
         </Style>
         <Style Selector="Button.model-btn">
             <Setter Property="Background" Value="#2A2A2A"/>
             <Setter Property="Foreground" Value="#AAAAAA"/>
-            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Padding" Value="8,3"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
@@ -55,44 +60,22 @@
         <!-- Right: Controls -->
         <Grid Grid.Column="1" RowDefinitions="Auto, *">
 
-            <!-- Header -->
-            <Border Grid.Row="0" Background="#1A1A1A"
-                    BorderBrush="#252525" BorderThickness="0,0,0,1"
-                    Padding="24,16">
-                <Grid ColumnDefinitions="Auto, *">
-                    <Button x:Name="BackButton" Grid.Column="0"
-                            Background="Transparent" BorderThickness="0"
-                            Width="36" Height="36" CornerRadius="8" Padding="0"
-                            ToolTip.Tip="Back to launcher" AutomationProperties.Name="Back to launcher">
-                        <Path Data="M15,18 L9,12 L15,6"
-                              Stroke="White" StrokeThickness="2" StrokeLineCap="Round"
-                              Width="14" Height="14" Stretch="None"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Button>
-                    <StackPanel Grid.Column="1" Margin="16,0,0,0"
-                                VerticalAlignment="Center" Spacing="2">
-                        <TextBlock Text="CITRINE" FontSize="10" FontWeight="Black"
-                                   Foreground="{StaticResource CitrineBrush}" LetterSpacing="3"/>
-                        <TextBlock Text="Skins" FontSize="20" FontWeight="Bold" Foreground="White"/>
-                        <TextBlock x:Name="SelectedAccountLabel"
-                                   Text="Linked to launcher selection"
-                                   FontSize="12"
-                                   Opacity="0.55"/>
-                    </StackPanel>
-                </Grid>
+            <Border Grid.Row="0" BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="10,8">
+                <TextBlock x:Name="SelectedAccountLabel" Text="Linked to launcher selection"
+                           FontSize="12" TextTrimming="CharacterEllipsis"/>
             </Border>
 
             <!-- Scrollable controls -->
-            <ScrollViewer Grid.Row="1" Padding="24,20,24,20">
+            <ScrollViewer Grid.Row="1" Padding="10,8" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="4">
 
                     <!-- Skin card -->
-                    <TextBlock Text="SKIN" Classes="section-title"/>
-                    <Border Classes="card">
-                        <StackPanel Spacing="12">
+                    <TextBlock Text="SKIN" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,2"/>
+                    <Border Padding="0,4,0,8">
+                        <StackPanel Spacing="6">
                             <Grid ColumnDefinitions="*, Auto">
                                 <TextBlock x:Name="SkinNameLabel" Text="Default skin"
-                                           Classes="label" VerticalAlignment="Center"/>
+                                           FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="LoadingLabel" Grid.Column="1"
                                            Text="Loading..." FontSize="11" Opacity="0.5"
                                            VerticalAlignment="Center" IsVisible="False"/>
@@ -100,7 +83,7 @@
 
                             <!-- Model toggle -->
                             <StackPanel Spacing="6">
-                                <TextBlock Text="Model" Classes="label"/>
+                                <TextBlock Text="Model" FontSize="12"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Button x:Name="ClassicModelBtn"
                                             Classes="model-btn" Content="Classic"/>
@@ -110,12 +93,12 @@
                             </StackPanel>
 
                             <!-- Action buttons -->
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <WrapPanel Orientation="Horizontal">
                                 <Button x:Name="UploadSkinBtn"
-                                        Classes="primary" Content="UPLOAD SKIN"/>
+                                        Classes="primary" Content="Upload skin" Margin="0,0,6,4"/>
                                 <Button x:Name="DownloadSkinBtn"
-                                        Classes="secondary" Content="DOWNLOAD"/>
-                            </StackPanel>
+                                        Classes="secondary" Content="Download" Margin="0,0,0,4"/>
+                            </WrapPanel>
 
                             <TextBlock x:Name="SkinErrorLabel" Foreground="#FF5555"
                                        FontSize="12" IsVisible="False" TextWrapping="Wrap"/>
@@ -124,14 +107,14 @@
 
                     <!-- Capes card (Microsoft only) -->
                     <StackPanel x:Name="CapesSection">
-                        <TextBlock Text="CAPES" Classes="section-title"/>
-                        <Border Classes="card">
-                            <StackPanel Spacing="12">
-                                <ListBox x:Name="CapesList" MaxHeight="160" AutomationProperties.Name="Capes">
+                        <TextBlock Text="CAPES" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,2"/>
+                        <Border Padding="0,4,0,8">
+                            <StackPanel Spacing="6">
+                                <ListBox x:Name="CapesList" MaxHeight="110" AutomationProperties.Name="Capes">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="handlers:MinecraftCape">
-                                            <Border Padding="10,8" Background="#2A2A2A"
-                                                    Margin="4,2" CornerRadius="6">
+                                            <Border Padding="4,3" Background="#2A2A2A"
+                                                    Margin="1" CornerRadius="2">
                                                 <Grid ColumnDefinitions="*, Auto">
                                                     <TextBlock Text="{Binding Alias}"
                                                                VerticalAlignment="Center"
@@ -156,7 +139,7 @@
                     </StackPanel>
 
                     <!-- Offline notice -->
-                    <Border x:Name="OfflineNotice" Classes="card" IsVisible="False">
+                    <Border x:Name="OfflineNotice" Padding="0,4,0,8" IsVisible="False">
                         <TextBlock FontSize="12" Opacity="0.5" TextWrapping="Wrap"
                                    Text="Skin preview only — offline skins apply locally and may not appear in multiplayer."/>
                     </Border>

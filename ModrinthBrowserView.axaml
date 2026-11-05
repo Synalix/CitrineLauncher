@@ -1,0 +1,42 @@
+<local:WorkspacePage xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:local="clr-namespace:CitrineLauncher" x:Class="CitrineLauncher.ModrinthBrowserView">
+    <Grid RowDefinitions="Auto, Auto, *, Auto, Auto, Auto">
+        <TextBlock x:Name="Heading" IsVisible="False"/>
+        <TextBlock x:Name="Subtitle" Text="Fabric packs · select a version to import" Foreground="#B0B0B0" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
+        <Grid Grid.Row="1" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,8">
+            <TextBox x:Name="SearchBox" HorizontalAlignment="Stretch" Watermark="Search Modrinth" AutomationProperties.Name="Search Modrinth" KeyDown="SearchBox_KeyDown"/>
+            <Button x:Name="ClearButton" Grid.Column="1" Content="Clear" Margin="6,0,0,0" Click="ClearButton_Click" AutomationProperties.Name="Clear search"/>
+            <Button x:Name="SearchButton" Grid.Column="2" Content="Search" Margin="6,0,0,0" Click="SearchButton_Click"/>
+        </Grid>
+        <ListBox x:Name="ResultsList" Grid.Row="2" Background="#202020" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.Name="Modrinth results" SelectionChanged="ResultsList_SelectionChanged">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="8,5"/></Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="local:ModrinthResultItem">
+                    <Grid ColumnDefinitions="36, *" MinHeight="42">
+                        <Image Source="{Binding IconBitmap}" Width="28" Height="28" Stretch="UniformToFill" VerticalAlignment="Top" Margin="0,2,8,0"/>
+                        <StackPanel Grid.Column="1" Spacing="1">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="#B0B0B0" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                            <TextBlock Text="{Binding DownloadsText}" FontSize="11" Foreground="#B0B0B0"/>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Grid Grid.Row="3" ColumnDefinitions="Auto, *, Auto" Margin="0,8,0,0">
+            <TextBlock Text="Version" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="VersionCombo" Grid.Column="1" HorizontalAlignment="Stretch" MaxWidth="260" PlaceholderText="Select a result" AutomationProperties.Name="Download version" SelectionChanged="VersionCombo_SelectionChanged"/>
+            <Button x:Name="LoadMoreButton" Grid.Column="2" Content="More" Margin="6,0,0,0" IsVisible="False" Click="LoadMoreButton_Click"/>
+        </Grid>
+        <ScrollViewer Grid.Row="4" MaxHeight="48" Margin="0,6" HorizontalScrollBarVisibility="Disabled">
+            <TextBlock x:Name="StatusText" Foreground="#B0B0B0" FontSize="11" TextWrapping="Wrap" IsVisible="False" AutomationProperties.LiveSetting="Polite"/>
+        </ScrollViewer>
+        <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="6">
+            <Button x:Name="ImportButton" Content="Use pack" Classes="primary" IsEnabled="False" Click="ImportButton_Click"/>
+            <Button Content="Back / Cancel" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</local:WorkspacePage>

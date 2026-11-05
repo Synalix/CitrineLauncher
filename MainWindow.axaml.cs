@@ -19,6 +19,7 @@ namespace CitrineLauncher
         private Process? currentGameProcess;
         private readonly Random _random = new Random();
         private CancellationTokenSource? _particleCts;
+        private ManagementWorkspace? _workspace;
 
         public MainWindow()
         {
@@ -63,7 +64,7 @@ namespace CitrineLauncher
             cbInstances.SelectionChanged += (s, e) =>
             {
                 UpdateLaunchButtonState();
-                btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
+                btnDeleteInstance.IsEnabled = _workspace == null && cbInstances.SelectedItem != null && !_launchBusy;
                 btnMods.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
             };
 
@@ -86,8 +87,13 @@ namespace CitrineLauncher
             ToggleParticlesButton.Opacity = Settings.Instance.ParticlesEnabled ? 1.0 : 0.5;
             Opened += (_, _) => StartParticleAnimation();
 
+            Closing += (_, e) =>
+            {
+                if (_workspace?.IsBusy == true) { e.Cancel = true; _workspace.RequestClose(); }
+            };
             this.Closed += (s, e) =>
             {
+                _workspace?.Dispose();
                 Settings.Instance.PropertyChanged -= Settings_PropertyChanged;
                 _particleCts?.Cancel();
                 _particleCts?.Dispose();
@@ -106,27 +112,43 @@ namespace CitrineLauncher
             if (instances.Count > 0)
                 cbInstances.SelectedIndex = 0;
             UpdateLaunchButtonState();
-            btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
+            btnDeleteInstance.IsEnabled = _workspace == null && cbInstances.SelectedItem != null && !_launchBusy;
             btnMods.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
         }
 
-        private async void BtnMods_Click(object? sender, RoutedEventArgs e)
+        private void BtnMods_Click(object? sender, RoutedEventArgs e)
         {
-            if (_launchBusy || cbInstances.SelectedItem is not CitrineLauncher.Models.GameInstance instance) return;
-            btnLaunch.IsEnabled = false;
-            try { await new ModsDialog(instance).ShowDialog(this); }
-            finally { UpdateLaunchButtonState(); }
+            if (!_launchBusy) OpenWorkspace("Mods");
         }
 
-        private async void BtnNewInstance_Click(object? sender, RoutedEventArgs e)
+        private void BtnNewInstance_Click(object? sender, RoutedEventArgs e)
         {
-            var dialog = new NewInstanceDialog();
-            var result = await dialog.ShowDialog<CitrineLauncher.Models.GameInstance?>(this);
-            if (result != null)
+            if (!_launchBusy) OpenWorkspace("New instance");
+        }
+
+        private void OpenWorkspace(string category)
+        {
+            accountCombo.IsDropDownOpen = false;
+            cbInstances.IsDropDownOpen = false;
+            if (_workspace == null)
             {
-                RefreshInstanceList();
-                cbInstances.SelectedItem = result;
+                _workspace = new ManagementWorkspace(cbInstances.SelectedItem as CitrineLauncher.Models.GameInstance);
+                _workspace.CloseRequested += (_, _) =>
+                {
+                    var closing = _workspace; _workspace = null;
+                    if (closing != null) { CenterPanel.Children.Remove(closing); closing.Dispose(); }
+                    UpdateLaunchButtonState(); btnSettings.Focus();
+                };
+                _workspace.SettingsSaved += (_, settings) => HandleSettingsSaved(settings);
+                _workspace.SelectedInstanceChanged += instance => cbInstances.SelectedItem = instance;
+                _workspace.InstanceCreated += instance => { RefreshInstanceList(); cbInstances.SelectedItem = instance; };
+                _workspace.InstancesChanged += () => { RefreshInstanceList(); _workspace?.RefreshInstances(cbInstances.SelectedItem as CitrineLauncher.Models.GameInstance); };
+                _workspace.BusyChanged += (_, _) => UpdateLaunchButtonState();
+                CenterPanel.Children.Add(_workspace);
             }
+            _workspace.SetCanEdit(!_launchBusy);
+            _workspace.Navigate(category);
+            UpdateLaunchButtonState();
         }
 
         private async void BtnDeleteInstance_Click(object? sender, RoutedEventArgs e)
@@ -177,14 +199,18 @@ namespace CitrineLauncher
                 ConfigureLauncher(Settings.Instance.MinecraftPath);
                 Handlers.InstanceManager.Instance.Load();
                 RefreshInstanceList();
+                _workspace?.RefreshInstances(cbInstances.SelectedItem as CitrineLauncher.Models.GameInstance);
             }
         }
 
         private void UpdateLaunchButtonState()
         {
-            btnLaunch.IsEnabled = !_launchBusy && accountCombo.SelectedItem != null && cbInstances.SelectedItem != null;
-            btnMods.IsEnabled = btnDeleteInstance.IsEnabled = !_launchBusy && cbInstances.SelectedItem != null;
-            cbInstances.IsEnabled = btnNewInstance.IsEnabled = !_launchBusy;
+            btnLaunch.IsEnabled = _workspace == null && !_launchBusy && accountCombo.SelectedItem != null && cbInstances.SelectedItem != null;
+            btnMods.IsEnabled = !_launchBusy && cbInstances.SelectedItem != null;
+            btnDeleteInstance.IsEnabled = _workspace == null && !_launchBusy && cbInstances.SelectedItem != null;
+            cbInstances.IsEnabled = _workspace == null && !_launchBusy;
+            btnNewInstance.IsEnabled = !_launchBusy;
+            _workspace?.SetCanEdit(!_launchBusy);
         }
 
         private void UpdateTitleText()
@@ -201,14 +227,7 @@ namespace CitrineLauncher
                 : string.Empty;
         }
 
-        private void OpenSettings(string? initialTab = null)
-        {
-            accountCombo.IsDropDownOpen = false;
-            cbInstances.IsDropDownOpen = false;
-            if (Handlers.SkinsHandler.IsOpen)
-                Handlers.SkinsHandler.HideSkins(CenterPanel);
-            SettingsHandler.ShowSettings(CenterPanel, HandleSettingsSaved, initialTab);
-        }
+        private void OpenSettings(string? initialTab = null) => OpenWorkspace(initialTab ?? "General");
 
         private void HandleSettingsSaved(Settings savedSettings)
         {
@@ -223,36 +242,13 @@ namespace CitrineLauncher
             OpenSettings("Accounts");
         }
 
-        private void BtnSettings_Click(object? sender, RoutedEventArgs e)
-        {
-            if (SettingsHandler.IsOpen)
-            {
-                SettingsHandler.CloseSettings(CenterPanel);
-                return;
-            }
-
-            OpenSettings();
-        }
+        private void BtnSettings_Click(object? sender, RoutedEventArgs e) => OpenSettings();
 
         private void BtnUpdate_Click(object? sender, RoutedEventArgs e)
         {
             Debug.WriteLine("Update clicked - not implemented yet");
         }
 
-        private void BtnSkins_Click(object? sender, RoutedEventArgs e)
-        {
-            accountCombo.IsDropDownOpen = false;
-            cbInstances.IsDropDownOpen = false;
-            if (Handlers.SkinsHandler.IsOpen)
-            {
-                Handlers.SkinsHandler.HideSkins(CenterPanel);
-                return;
-            }
-
-            if (SettingsHandler.IsOpen)
-                SettingsHandler.CloseSettings(CenterPanel);
-
-            Handlers.SkinsHandler.ShowSkins(CenterPanel);
-        }
+        private void BtnSkins_Click(object? sender, RoutedEventArgs e) => OpenWorkspace("Skins");
     }
 }

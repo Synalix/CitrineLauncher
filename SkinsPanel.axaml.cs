@@ -14,7 +14,6 @@ namespace CitrineLauncher
 {
     public partial class SkinsPanel : UserControl
     {
-        public event EventHandler? CloseRequested;
 
         private CancellationTokenSource _cts = new();
         private Account? _activeAccount;
@@ -33,8 +32,6 @@ namespace CitrineLauncher
 
         private void SetupControls()
         {
-            BackButton.Click += (s, e) => CloseRequested?.Invoke(this, EventArgs.Empty);
-
             ClassicModelBtn.Click += (s, e) => SetModel("classic");
             SlimModelBtn.Click    += (s, e) => SetModel("slim");
             UploadSkinBtn.Click        += UploadSkin_Click;

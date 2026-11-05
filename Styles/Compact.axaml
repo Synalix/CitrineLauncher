@@ -1,0 +1,51 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StyleInclude Source="avares://CitrineLauncher/Styles/Shared.axaml"/>
+    <Style Selector="Button">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="Padding" Value="9,4"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    <Style Selector="Button.primary, Button.secondary">
+        <Setter Property="Padding" Value="9,4"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+    <Style Selector="TextBox">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="Padding" Value="7,4"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    <Style Selector="ComboBox">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="Padding" Value="7,3"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    <Style Selector="CheckBox">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="26"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="ListBoxItem">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MinHeight" Value="26"/>
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
+    <Style Selector="TextBlock"><Setter Property="FontSize" Value="12"/></Style>
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style Selector="TextBlock.section-title">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="LetterSpacing" Value="0"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+</Styles>

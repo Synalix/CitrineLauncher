@@ -63,3 +63,6 @@ New Instance can browse Modrinth packs or select a local `.mrpack`. The pack man
 The .NET 10 SDK can cross-build the Windows app on Linux with `dotnet build` (Windows targeting is enabled in the project). Run portable service tests with `dotnet test tests/CitrineLauncher.Tests` and native headless UI checks with `dotnet test tests/CitrineLauncher.Headless.Tests`. The latter compiles the same application sources for its test host; it does not change the shipping Windows target.
 
 Windows UI, NativeWebView, screen-reader and high-DPI testing are still required before merging. See [the design contract](DESIGN.md), [workflow contract](UX-CONTRACT.md), and [Modrinth reference notes](docs/modrinth-reference.md).
+
+## Compact management workspace
+Settings, accounts, skins, instance creation, installed mods and Modrinth browsing now share one compact category sidebar inside the launcher. The main launcher view is retained. Actions use short, content-sized buttons and settings use labeled rows; offline accounts are edited inline. Active file operations block navigation until cancellation/cleanup completes.

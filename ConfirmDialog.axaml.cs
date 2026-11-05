@@ -8,6 +8,7 @@ namespace CitrineLauncher
         public ConfirmDialog(string title, string body)
         {
             InitializeComponent();
+            Title = title;
             TitleText.Text = title;
             BodyText.Text = body;
             Opened += (_, _) => CancelButton.Focus();

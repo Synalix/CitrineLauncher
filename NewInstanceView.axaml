@@ -1,0 +1,35 @@
+<local:WorkspacePage xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:local="clr-namespace:CitrineLauncher" x:Class="CitrineLauncher.NewInstanceView" VerticalAlignment="Top" MaxHeight="340">
+    <Grid RowDefinitions="*, Auto">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="FormPanel" Spacing="10" HorizontalAlignment="Left" MaxWidth="440">
+                <TextBlock Text="Start with Minecraft, or import a pack." Foreground="#B0B0B0" FontSize="12"/>
+                <Grid ColumnDefinitions="100, *" RowDefinitions="Auto, Auto, Auto">
+                    <TextBlock Text="Name" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBox x:Name="NameInput" Grid.Column="1" Width="240" MaxLength="80" Watermark="Optional" Margin="0,0,0,8" AutomationProperties.Name="Instance name"/>
+                    <TextBlock Grid.Row="1" Text="Minecraft" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                    <ComboBox x:Name="VersionCombo" Grid.Row="1" Grid.Column="1" Width="150" Margin="0,0,0,8" AutomationProperties.Name="Minecraft version" PlaceholderText="Version"/>
+                    <TextBlock Grid.Row="2" Text="Loader" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="LoaderCombo" Grid.Row="2" Grid.Column="1" Width="120" AutomationProperties.Name="Mod loader"/>
+                </Grid>
+                <Border Height="1" Background="#303030" Margin="0,2"/>
+                <TextBlock Text="Modpack" FontWeight="SemiBold" FontSize="12"/>
+                <Grid ColumnDefinitions="Auto, Auto">
+                    <TextBox x:Name="ModpackPathBox" Width="240" IsReadOnly="True" Watermark="No pack selected" AutomationProperties.Name="Selected modpack"/>
+                    <Button Grid.Column="1" Content="Clear" Margin="6,0,0,0" Click="ClearPackButton_Click" AutomationProperties.Name="Clear selected pack"/>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="BrowseModpackButton" Content="Local file…" Click="BrowseModpackButton_Click"/>
+                    <Button x:Name="BrowseModrinthButton" Content="Browse Modrinth" Click="BrowseModrinthButton_Click"/>
+                </StackPanel>
+                <CheckBox x:Name="IncludeOptionalCheck" Content="Include optional client files" IsChecked="True" IsVisible="False"/>
+                <TextBlock x:Name="StatusText" Foreground="#B0B0B0" FontSize="12" TextWrapping="Wrap" IsVisible="False" AutomationProperties.LiveSetting="Polite"/>
+                <TextBlock x:Name="ErrorText" Foreground="#FF6B6B" FontSize="12" TextWrapping="Wrap" IsVisible="False" AutomationProperties.LiveSetting="Assertive"/>
+            </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="0,10,0,0">
+            <Button x:Name="CreateButton" Content="Create" Classes="primary" Click="CreateButton_Click"/>
+            <Button Content="Cancel" Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</local:WorkspacePage>

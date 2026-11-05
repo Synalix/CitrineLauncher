@@ -1,0 +1,29 @@
+<local:WorkspacePage xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:local="clr-namespace:CitrineLauncher" xmlns:models="clr-namespace:CitrineLauncher.Models"
+                     x:Class="CitrineLauncher.InstancesView">
+    <Grid RowDefinitions="Auto, *, Auto">
+        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
+            <Button Content="New instance" Classes="primary" Click="New_Click"/>
+            <Button x:Name="ModsButton" Content="Mods" IsEnabled="False" Click="Mods_Click"/>
+            <Button x:Name="FolderButton" Content="Folder" IsEnabled="False" Click="Folder_Click"/>
+            <Button x:Name="DeleteButton" Content="Delete…" IsEnabled="False" Click="Delete_Click"/>
+        </StackPanel>
+        <Grid Grid.Row="1">
+            <ListBox x:Name="InstancesList" AutomationProperties.Name="Instances" Background="#202020"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="InstancesList_SelectionChanged">
+                <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="8,6"/></Style></ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:GameInstance">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="1" Text="{Binding GameVersion}" Foreground="#B0B0B0" Margin="12,0,0,0"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock x:Name="EmptyText" Text="No instances yet. Create one to get started." Foreground="#B0B0B0" IsHitTestVisible="False"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="12"/>
+        </Grid>
+        <TextBlock x:Name="StatusText" Grid.Row="2" Margin="0,6,0,0" Foreground="#B0B0B0" TextWrapping="Wrap" FontSize="11" AutomationProperties.LiveSetting="Polite"/>
+    </Grid>
+</local:WorkspacePage>

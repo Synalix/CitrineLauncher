@@ -9,21 +9,21 @@ using System.Threading;
 
 namespace CitrineLauncher;
 
-public partial class ModsDialog : Window
+public partial class ModsView : WorkspacePage
 {
     private readonly GameInstance _instance;
     private readonly CancellationTokenSource _lifetime = new();
-    private bool _busy;
-    public ModsDialog(GameInstance instance)
+    private CancellationTokenSource? _operation;
+    public event Action? BrowseRequested;
+    public ModsView(GameInstance instance)
     {
         InitializeComponent(); _instance = instance;
-        Title = $"Mods — {instance.Name}"; Heading.Text = Title;
+        Heading.Text = instance.Name;
         InstanceInfo.Text = $"Minecraft {instance.GameVersion} · {instance.Loader} {instance.LoaderVersion}";
-        Closing += (_, e) => { if (_busy) { e.Cancel = true; _lifetime.Cancel(); } };
-        Closed += (_, _) => _lifetime.Cancel();
+
         Refresh();
     }
-    private void Refresh()
+    public void Refresh()
     {
         try
         {
@@ -40,19 +40,17 @@ public partial class ModsDialog : Window
     private void UpdateSelection()
     {
         var mod = ModsList.SelectedItem as InstalledMod;
-        ToggleButton.IsEnabled = RemoveButton.IsEnabled = !_busy && mod != null;
+        ToggleButton.IsEnabled = RemoveButton.IsEnabled = !IsBusy && mod != null;
         ToggleButton.Content = mod?.Enabled == false ? "Enable" : "Disable";
     }
     private void ModsList_SelectionChanged(object? sender, SelectionChangedEventArgs e) => UpdateSelection();
     private void RefreshButton_Click(object? sender, RoutedEventArgs e) => Refresh();
-    private async void BrowseButton_Click(object? sender, RoutedEventArgs e)
-    {
-        var result = await new ModrinthBrowseDialog(_instance.GameVersion, _instance).ShowDialog<ModrinthBrowseDialog.PickResult?>(this);
-        Refresh(); if (result != null) StatusText.Text = $"Installed {result.PackName} and its required dependencies.";
-    }
+    private void BrowseButton_Click(object? sender, RoutedEventArgs e) => BrowseRequested?.Invoke();
+    public override void CancelOperation() => _operation?.Cancel();
+    public override void Dispose() { _lifetime.Cancel(); _operation?.Cancel(); }
     private async void LocalButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (_busy) return;
+        if (IsBusy) return;
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -62,13 +60,14 @@ public partial class ModsDialog : Window
                 FileTypeFilter = new[] { new FilePickerFileType("Minecraft mods") { Patterns = new[] { "*.jar" } } }
             });
             if (files.Count == 0) return;
-            _busy = true; Actions.IsEnabled = ModsList.IsEnabled = false; UpdateSelection(); StatusText.Text = "Adding local mods…";
-            await InstanceModManager.Shared.AddLocalAsync(_instance, files.Select(f => f.TryGetLocalPath() ?? throw new InvalidOperationException("Select a local JAR file.")), _lifetime.Token);
+            _operation?.Dispose(); _operation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+            IsBusy = true; Actions.IsEnabled = ModsList.IsEnabled = false; UpdateSelection(); StatusText.Text = "Adding local mods…";
+            await InstanceModManager.Shared.AddLocalAsync(_instance, files.Select(f => f.TryGetLocalPath() ?? throw new InvalidOperationException("Select a local JAR file.")), _operation.Token);
             Refresh(); StatusText.Text = "Local mods added.";
         }
-        catch (OperationCanceledException) { StatusText.Text = "Cancelled. Close and reopen this dialog to try again."; }
+        catch (OperationCanceledException) { StatusText.Text = "Cancelled. You can try again."; }
         catch (Exception ex) { StatusText.Text = "Could not add mods. " + ex.Message; }
-        finally { _busy = false; Actions.IsEnabled = ModsList.IsEnabled = true; UpdateSelection(); }
+        finally { IsBusy = false; Actions.IsEnabled = ModsList.IsEnabled = true; UpdateSelection(); }
     }
     private void ToggleButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -80,9 +79,9 @@ public partial class ModsDialog : Window
     {
         if (ModsList.SelectedItem is not InstalledMod mod) return;
         var dialog = new ConfirmDialog($"Remove {mod.Name}?", "This removes the mod file from this instance. Configuration and dependencies are kept.");
-        if (!await dialog.ShowDialog<bool>(this)) return;
+        if (OwnerWindow is not Window owner || !await dialog.ShowDialog<bool>(owner)) return;
         try { InstanceModManager.Shared.Remove(_instance, mod); Refresh(); StatusText.Text = "Mod removed."; }
         catch (Exception ex) { StatusText.Text = "Could not remove mod. " + ex.Message; }
     }
-    private void CloseButton_Click(object? sender, RoutedEventArgs e) { if (_busy) _lifetime.Cancel(); else Close(); }
+    private void CloseButton_Click(object? sender, RoutedEventArgs e) { if (IsBusy) CancelOperation(); else RequestBack(); }
 }

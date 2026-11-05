@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace CitrineLauncher;
 
-public partial class ModrinthBrowseDialog : Window
+public partial class ModrinthBrowserView : WorkspacePage
 {
     private readonly string? _gameVersion;
     private readonly ModrinthApi _api;
@@ -26,16 +26,18 @@ public partial class ModrinthBrowseDialog : Window
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly List<ModrinthResultItem> _items = [];
     private int _generation, _versionGeneration, _total;
-    private bool _busy, _closed;
+    private bool _closed, _started;
+    private CancellationTokenSource? _operation;
+    public event Action<PickResult>? Completed;
     private string ProjectType => _instance == null ? "modpack" : "mod";
     public record PickResult(string TempFilePath, string PackName, string? GameVersion);
-    public ModrinthBrowseDialog(string? gameVersion = null, GameInstance? instance = null, ModrinthApi? api = null, System.Net.Http.HttpClient? http = null)
+    public ModrinthBrowserView(string? gameVersion = null, GameInstance? instance = null, ModrinthApi? api = null, System.Net.Http.HttpClient? http = null)
     {
         InitializeComponent(); _gameVersion = gameVersion; _instance = instance;
         _api = api ?? ModrinthClient.Api; _http = http ?? ModrinthClient.Http;
         if (instance != null)
         {
-            Title = "Add mods from Modrinth"; Heading.Text = Title;
+            Heading.Text = "Find mods";
             Subtitle.Text = $"Fabric · Minecraft {instance.GameVersion} · required dependencies included";
             ImportButton.Content = "Install";
         }
@@ -43,24 +45,27 @@ public partial class ModrinthBrowseDialog : Window
         _debounce.Tick += (_, _) => { _debounce.Stop(); RunSearch(); };
         SearchBox.TextChanged += (_, _) =>
         {
-            if (_busy) return;
+            if (IsBusy) return;
             _searchCts?.Cancel(); _versionCts?.Cancel(); _generation++; _versionGeneration++;
             ImportButton.IsEnabled = false; LoadMoreButton.IsEnabled = false; _debounce.Stop(); _debounce.Start();
         };
-        Opened += (_, _) => { SearchBox.Focus(); RunSearch(); };
-        Closed += (_, _) =>
-        {
-            _closed = true; _debounce.Stop(); _lifetime.Cancel(); _searchCts?.Cancel(); _versionCts?.Cancel();
-            foreach (var item in _items) item.IconBitmap?.Dispose(); _items.Clear();
-        };
+        Loaded += (_, _) => { if (_started) return; _started = true; SearchBox.Focus(); RunSearch(); };
     }
-    private void SearchBox_KeyDown(object? sender, KeyEventArgs e) { if (e.Key == Key.Enter && !_busy) { _debounce.Stop(); RunSearch(); e.Handled = true; } }
+    public override void CancelOperation() => _operation?.Cancel();
+    public override void Dispose()
+    {
+        if (_closed) return;
+        _closed = true; _debounce.Stop(); _lifetime.Cancel(); _operation?.Cancel(); _searchCts?.Cancel(); _versionCts?.Cancel();
+        ResultsList.ItemsSource = null;
+        foreach (var item in _items) item.IconBitmap?.Dispose(); _items.Clear();
+    }
+    private void SearchBox_KeyDown(object? sender, KeyEventArgs e) { if (e.Key == Key.Enter && !IsBusy) { _debounce.Stop(); RunSearch(); e.Handled = true; } }
     private void SearchButton_Click(object? sender, RoutedEventArgs e) { _debounce.Stop(); RunSearch(); }
     private void ClearButton_Click(object? sender, RoutedEventArgs e) { SearchBox.Text = ""; _debounce.Stop(); RunSearch(); SearchBox.Focus(); }
     private void LoadMoreButton_Click(object? sender, RoutedEventArgs e) => RunSearch(true);
     private void RunSearch(bool append = false)
     {
-        if (_busy || _closed) return;
+        if (IsBusy || _closed) return;
         _debounce.Stop(); _searchCts?.Cancel(); _searchCts?.Dispose();
         _searchCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var generation = ++_generation;
@@ -110,7 +115,7 @@ public partial class ModrinthBrowseDialog : Window
     }
     private async void ResultsList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_busy) return;
+        if (IsBusy) return;
         _versionCts?.Cancel(); _versionCts?.Dispose(); _versionCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var ct = _versionCts.Token; var generation = ++_versionGeneration;
         VersionCombo.ItemsSource = null; ImportButton.IsEnabled = false;
@@ -126,11 +131,12 @@ public partial class ModrinthBrowseDialog : Window
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (generation == _versionGeneration && !_closed) SetStatus("Could not load versions. Select the project again. " + ex.Message); }
     }
-    private void VersionCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) => ImportButton.IsEnabled = !_busy && VersionCombo.SelectedItem is ModrinthVersion;
+    private void VersionCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) => ImportButton.IsEnabled = !IsBusy && VersionCombo.SelectedItem is ModrinthVersion;
     private async void ImportButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (_busy || ResultsList.SelectedItem is not ModrinthResultItem item || VersionCombo.SelectedItem is not ModrinthVersion version) return;
-        _busy = true; _debounce.Stop(); _searchCts?.Cancel();
+        if (IsBusy || ResultsList.SelectedItem is not ModrinthResultItem item || VersionCombo.SelectedItem is not ModrinthVersion version) return;
+        _operation?.Dispose(); _operation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        IsBusy = true; _debounce.Stop(); _searchCts?.Cancel();
         ImportButton.IsEnabled = false; SearchBox.IsEnabled = false; SearchButton.IsEnabled = false; ClearButton.IsEnabled = false;
         ResultsList.IsEnabled = false; VersionCombo.IsEnabled = false; LoadMoreButton.IsEnabled = false;
         string? temp = null;
@@ -138,18 +144,18 @@ public partial class ModrinthBrowseDialog : Window
         {
             if (_instance != null)
             {
-                await InstanceModManager.Shared.InstallAsync(_instance, version, _lifetime.Token, new Progress<string>(s => { if (!_closed) SetStatus(s); }));
-                if (!_closed) Close(new PickResult("", item.Title, _gameVersion));
+                await InstanceModManager.Shared.InstallAsync(_instance, version, _operation.Token, new Progress<string>(s => { if (!_closed) SetStatus(s); }));
+                if (!_closed) { SetStatus($"Installed {item.Title} and required dependencies."); Completed?.Invoke(new PickResult("", item.Title, _gameVersion)); }
             }
             else
             {
                 temp = Path.Combine(Path.GetTempPath(), "citrine_modrinth_" + Guid.NewGuid().ToString("N") + ".mrpack");
                 SetStatus("Downloading pack…");
-                await VerifiedDownload.FetchAsync(_http, [version.DownloadUrl], temp, version.Sha512, version.Sha1, _lifetime.Token,
+                await VerifiedDownload.FetchAsync(_http, [version.DownloadUrl], temp, version.Sha512, version.Sha1, _operation.Token,
                     new Progress<int>(p => { if (!_closed) SetStatus($"Downloading pack… {p}%"); }));
                 // Validate supported dependencies before returning the selection.
-                var manifest = await PackManifest.ReadArchiveAsync(temp, _lifetime.Token);
-                if (!_closed) { var selected = temp; temp = null; Close(new PickResult(selected, item.Title, manifest.GameVersion)); }
+                var manifest = await PackManifest.ReadArchiveAsync(temp, _operation.Token);
+                if (!_closed) { var selected = temp; temp = null; IsBusy = false; Completed?.Invoke(new PickResult(selected, item.Title, manifest.GameVersion)); }
             }
         }
         catch (OperationCanceledException) { if (!_closed) SetStatus("Cancelled."); }
@@ -157,7 +163,7 @@ public partial class ModrinthBrowseDialog : Window
         finally
         {
             if (temp != null) File.Delete(temp);
-            _busy = false;
+            IsBusy = false;
             if (!_closed)
             {
                 SearchBox.IsEnabled = true; SearchButton.IsEnabled = true; ClearButton.IsEnabled = true; ResultsList.IsEnabled = true;
@@ -166,7 +172,7 @@ public partial class ModrinthBrowseDialog : Window
         }
     }
     private void SetStatus(string text) { StatusText.Text = text; StatusText.IsVisible = true; }
-    private void CancelButton_Click(object? sender, RoutedEventArgs e) { _lifetime.Cancel(); Close(null); }
+    private void CancelButton_Click(object? sender, RoutedEventArgs e) { if (IsBusy) CancelOperation(); else RequestBack(); }
 }
 
 public class ModrinthResultItem(ModrinthProject project) : INotifyPropertyChanged

@@ -35,14 +35,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="ModrinthBrowseDialog.axaml.cs">
-      <DependentUpon>ModrinthBrowseDialog.axaml</DependentUpon>
+    <Compile Update="ModrinthBrowserView.axaml.cs">
+      <DependentUpon>ModrinthBrowserView.axaml</DependentUpon>
     </Compile>
-    <Compile Update="OfflineAccountDialog.axaml.cs">
-      <DependentUpon>OfflineAccountDialog.axaml</DependentUpon>
-    </Compile>
-    <Compile Update="NewInstanceDialog.axaml.cs">
-      <DependentUpon>NewInstanceDialog.axaml</DependentUpon>
+    <Compile Update="NewInstanceView.axaml.cs">
+      <DependentUpon>NewInstanceView.axaml</DependentUpon>
     </Compile>
     <Compile Update="ConfirmDialog.axaml.cs">
       <DependentUpon>ConfirmDialog.axaml</DependentUpon>

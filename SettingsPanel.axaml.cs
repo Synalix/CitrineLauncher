@@ -14,6 +14,17 @@ namespace CitrineLauncher
         public event EventHandler<Settings>? SettingsSaved;
 
         private bool _isEditingFolder = false;
+        private Account? _editingAccount;
+        public bool IsBusy { get; private set; }
+        public event EventHandler? BusyChanged;
+
+        private void SetBusy(bool busy)
+        {
+            IsBusy = busy;
+            AccountsSection.IsEnabled = !busy;
+            PerformanceSection.IsEnabled = !busy;
+            BusyChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         public SettingsPanel()
         {
@@ -21,7 +32,7 @@ namespace CitrineLauncher
             SetupControls();
             KeyDown += (_, e) =>
             {
-                if (e.Key == Avalonia.Input.Key.Escape)
+                if (e.Key == Avalonia.Input.Key.Escape && !IsBusy)
                 {
                     e.Handled = true;
                     CloseRequested?.Invoke(this, EventArgs.Empty);
@@ -99,36 +110,21 @@ namespace CitrineLauncher
             // Show folder path (read-only display - not a TwoWay binding to avoid writing on every keystroke, bug #7)
             FolderPathTextBlock.Text = settings.MinecraftPath;
 
-            // Add offline account
-            AddOfflineButton.Click += async (s, e) =>
+            AddOfflineButton.Click += (_, _) => BeginAccountEdit(null);
+            SaveAccountButton.Click += (_, _) => SaveOfflineAccount();
+            CancelAccountButton.Click += (_, _) => CancelAccountEdit();
+            AccountsList.SelectionChanged += (_, _) => UpdateAccountActions();
+            UsernameInput.KeyDown += (_, e) =>
             {
-                var dialog = new OfflineAccountDialog();
-                var parentWindow = this.VisualRoot as Window;
-                if (parentWindow != null)
-                {
-                    var result = await dialog.ShowDialog<string?>(parentWindow);
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        if (settings.Accounts.Any(account =>
-                                account.Type == "Offline" &&
-                                string.Equals(account.Username, result, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            return;
-                        }
-
-                        settings.Accounts.Add(new Account { Username = result, Type = "Offline" });
-                        RefreshAccountList();
-                        settings.Save();
-                        // Notify MainWindow
-                        SettingsSaved?.Invoke(this, settings);
-                    }
-                }
+                if (e.Key == Avalonia.Input.Key.Enter) { SaveOfflineAccount(); e.Handled = true; }
+                else if (e.Key == Avalonia.Input.Key.Escape) { CancelAccountEdit(); e.Handled = true; }
             };
 
             // Microsoft account login
             AddMicrosoftButton.Click += async (s, e) =>
             {
-                AddMicrosoftButton.IsEnabled = false;
+                SetBusy(true);
+                AccountErrorLabel.IsVisible = false;
                 try
                 {
                     // Authenticate once to discover the username
@@ -160,11 +156,12 @@ namespace CitrineLauncher
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Microsoft auth error: {ex.Message}");
+                    AccountErrorLabel.Text = $"Microsoft sign-in failed: {ex.Message}";
+                    AccountErrorLabel.IsVisible = true;
                 }
                 finally
                 {
-                    AddMicrosoftButton.IsEnabled = true;
+                    SetBusy(false);
                 }
             };
 
@@ -199,6 +196,7 @@ namespace CitrineLauncher
                         // Migrate existing data to new path
                         try
                         {
+                            SetBusy(true);
                             MigrateData(oldPath, newPath);
                         }
                         catch (Exception ex)
@@ -207,6 +205,7 @@ namespace CitrineLauncher
                             FolderErrorLabel.IsVisible = true;
                             return;
                         }
+                        finally { SetBusy(false); }
                     }
 
                     FolderErrorLabel.IsVisible = false;
@@ -225,14 +224,7 @@ namespace CitrineLauncher
                 }
             };
 
-            // Navigation buttons
-            GeneralNav.Click += (s, e) => ShowSection("General");
-            AccountsNav.Click += (s, e) => ShowSection("Accounts");
-            AppearanceNav.Click += (s, e) => ShowSection("Appearance");
-            PerformanceNav.Click += (s, e) => ShowSection("Performance");
 
-            // Close button
-            CloseButton.Click += (s, e) => CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 
         private static void MigrateData(string fromPath, string toPath)
@@ -294,7 +286,7 @@ namespace CitrineLauncher
             _isEditingFolder = isEditing;
             FolderPathTextBlock.IsVisible = !isEditing;
             FolderPathTextBox.IsVisible = isEditing;
-            ChangeFolderButton.Content = isEditing ? "SAVE" : "CHANGE";
+            ChangeFolderButton.Content = isEditing ? "Save" : "Change";
         }
 
         public void SwitchToTab(string tabName)
@@ -304,6 +296,7 @@ namespace CitrineLauncher
 
         public void ShowSection(string sectionName)
         {
+            if (IsBusy) return;
             GeneralSection.IsVisible = sectionName == "General";
             AccountsSection.IsVisible = sectionName == "Accounts";
             AppearanceSection.IsVisible = sectionName == "Appearance";
@@ -314,46 +307,76 @@ namespace CitrineLauncher
                 SetFolderEditMode(false);
         }
 
-        // Bug fix #9: made async, uses await instead of ContinueWith
-        private async void EditMenuItem_Click(object sender, RoutedEventArgs e)
+        private void UpdateAccountActions()
         {
-            if (AccountsList.SelectedItem is Account selectedAccount && selectedAccount.Type == "Offline")
+            EditAccountButton.IsEnabled = AccountsList.SelectedItem is Account { Type: "Offline" };
+            RemoveAccountButton.IsEnabled = AccountsList.SelectedItem is Account;
+        }
+
+        private void BeginAccountEdit(Account? account)
+        {
+            if (IsBusy) return;
+            _editingAccount = account;
+            UsernameInput.Text = account?.Username ?? string.Empty;
+            SaveAccountButton.Content = account == null ? "Add" : "Save";
+            AccountErrorLabel.IsVisible = false;
+            AccountEditor.IsVisible = true;
+            UsernameInput.Focus();
+        }
+
+        private void CancelAccountEdit()
+        {
+            _editingAccount = null;
+            AccountEditor.IsVisible = false;
+            AccountErrorLabel.IsVisible = false;
+        }
+
+        private void SaveOfflineAccount()
+        {
+            if (IsBusy) return;
+            var username = UsernameInput.Text?.Trim() ?? string.Empty;
+            string? error = username.Length < 3 || username.Length > 16
+                ? "Username must be 3–16 characters."
+                : !Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$")
+                    ? "Only letters, numbers and underscores allowed." : null;
+            var settings = Settings.Instance;
+            if (error == null && settings.Accounts.Any(a => a != _editingAccount && a.Type == "Offline" &&
+                string.Equals(a.Username, username, StringComparison.OrdinalIgnoreCase)))
+                error = "An offline account with this username already exists.";
+            if (error != null)
             {
-                var previousUsername = selectedAccount.Username;
-                var dialog = new OfflineAccountDialog(selectedAccount.Username);
-                var parentWindow = this.VisualRoot as Window;
-                if (parentWindow != null)
+                AccountErrorLabel.Text = error;
+                AccountErrorLabel.IsVisible = true;
+                return;
+            }
+            if (_editingAccount is Account account)
+            {
+                var previousUsername = account.Username;
+                if (!string.Equals(previousUsername, username, StringComparison.OrdinalIgnoreCase))
                 {
-                    var result = await dialog.ShowDialog<string?>(parentWindow);
-                    if (result != null && !string.Equals(result, previousUsername, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Bug 1: reject rename if another offline account already has this username
-                        if (Settings.Instance.Accounts.Any(a =>
-                                a != selectedAccount &&
-                                a.Type == "Offline" &&
-                                string.Equals(a.Username, result, StringComparison.OrdinalIgnoreCase)))
-                            return;
-
-                        // Bug 2: unregister old name from skin server before renaming
-                        OfflineSkinServer.Shared.Unregister(selectedAccount);
-
-                        selectedAccount.Username = result;
-                        if (string.Equals(Settings.Instance.Username, previousUsername, StringComparison.OrdinalIgnoreCase))
-                            Settings.Instance.Username = result;
-
-                        // Re-register under the new username
-                        OfflineSkinServer.Shared.Register(selectedAccount);
-
-                        Settings.Instance.Save();
-                        RefreshAccountList();
-                        SettingsSaved?.Invoke(this, Settings.Instance);
-                    }
+                    OfflineSkinServer.Shared.Unregister(account);
+                    account.Username = username;
+                    if (string.Equals(settings.Username, previousUsername, StringComparison.OrdinalIgnoreCase))
+                        settings.Username = username;
+                    OfflineSkinServer.Shared.Register(account);
                 }
             }
+            else settings.Accounts.Add(new Account { Username = username, Type = "Offline" });
+            settings.Save();
+            RefreshAccountList();
+            CancelAccountEdit();
+            SettingsSaved?.Invoke(this, settings);
+        }
+
+        private void EditMenuItem_Click(object? sender, RoutedEventArgs e)
+        {
+            if (AccountsList.SelectedItem is Account { Type: "Offline" } account)
+                BeginAccountEdit(account);
         }
 
         private void DeleteMenuItem_Click(object sender, RoutedEventArgs e)
         {
+            if (IsBusy) return;
             if (AccountsList.SelectedItem is Account selectedAccount)
             {
                 // Unregister from skin server before removing
@@ -364,6 +387,7 @@ namespace CitrineLauncher
 
                 if (Settings.Instance.RemoveAccount(selectedAccount))
                 {
+                    if (_editingAccount == selectedAccount) CancelAccountEdit();
                     RefreshAccountList();
                     SettingsSaved?.Invoke(this, Settings.Instance);
                 }

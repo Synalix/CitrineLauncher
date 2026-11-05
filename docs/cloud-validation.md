@@ -4,7 +4,7 @@ Branch: `feat/avalonia-accessibility-mod-management`. Shipping target stays `net
 
 ## Automated evidence
 - `dotnet test tests/CitrineLauncher.Tests`: 31 portable tests. Covers Modrinth filters, compatible/primary files, manifest versions, unsupported loaders, client environments, client override priority, path containment, hash/fallback downloads, transactional failures, local mod lifecycle, dependency cycles, order-independent exact dependency resolution and bidirectional/version-specific incompatibilities.
-- `dotnet test tests/CitrineLauncher.Headless.Tests`: 7 native Avalonia tests compiled from the actual application AXAML/code. Covers constrained Settings/Mods/New Instance/Main layouts, long messages, safe confirmation focus, accessible field naming, late search responses, and Settings Escape handling.
+- `dotnet test tests/CitrineLauncher.Headless.Tests`: 15 native Avalonia tests compiled from the actual application AXAML/code. Covers constrained Settings/Mods/New Instance/Main layouts, long messages, safe confirmation focus, accessible field naming, late search responses, and Settings Escape handling.
 - A stream test cancels after a partial file exists, confirms original destination content is retained, and confirms partial-file cleanup.
 - Debug/Release Windows cross-builds and self-contained, single-file win-x64 publish succeeded. Generated executable: `/workspace/scratch/CitrineLauncher-win-x64/CitrineLauncher.exe`.
 - `git diff --check`, targeted `dotnet format whitespace`, and official `designmd lint DESIGN.md` passed. Design lint: 0 errors, 0 warnings. Cloud-provided UI skill launcher/static-audit scripts were not installed as executable local files; no separate premium static-audit compliance claim is made.
@@ -37,3 +37,10 @@ The original implementation was compiled separately against the regression tests
 Windows 10/11 interaction: Microsoft authentication, Minecraft launch, NativeWebView skin preview, high-DPI sizing, keyboard traversal/popup selection, screen-reader names/live announcements and final visual comparison. Cross-builds cannot substitute for these checks.
 
 Existing MicrosoftAuth/SkinsPanel nullability warnings remain. Parameterized dialog runtime-loader warnings remain where a context/content constructor is required; direct construction works in headless tests. The headless dependency restore also exposes the inherited Avalonia desktop transitive `Tmds.DBus.Protocol` 0.21.2 advisory (GHSA-xrw6-gwf8-vvr9), suppressed by the shipping project's pre-existing NU1903 setting. A dependency upgrade was not mixed into this UI/mod workflow change.
+
+## Compact workspace update
+The user's follow-up replaces spacious management dialogs with a single in-window category frame. NewInstanceView, ModsView, ModrinthBrowserView and InstancesView are embedded WorkspacePage controls; SettingsPanel supplies content to shell categories and offline accounts are edited inline. MainWindow's AXAML/layout is unchanged by this update.
+
+The headless suite now has 15 tests. New checks cover actual main-window routing without owned task windows, creation-form preservation across browsing, inline account validation/identity-preserving rename, active-operation navigation blocking/cancellation, running-game mutation restrictions, shared instance selection, and a complete pack-browser → creation → instances flow. Category rendering was captured at 850×460 and 650×374 workspace sizes; the main-window integration is checked at 720×540. Native Skins WebView rendering and provider authentication still require Windows.
+
+New management density is scoped through Styles/Compact.axaml. Content-sized actions are 26–28 DIP high, form inputs use useful fixed widths, settings use labeled rows, and the 132 DIP rail shares context across categories. Confirmation dialogs are compact; OS file dialogs and provider authentication remain native. Backend download/integrity/dependency services were retained.

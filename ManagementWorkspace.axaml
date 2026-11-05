@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="CitrineLauncher.ManagementWorkspace" Background="#181818" Margin="8" KeyboardNavigation.TabNavigation="Cycle">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#E2B007"/>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <StyleInclude Source="avares://CitrineLauncher/Styles/Compact.axaml"/>
+        <Style Selector="ListBox.categories">
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.categories ListBoxItem">
+            <Setter Property="Padding" Value="10,5"/><Setter Property="MinHeight" Value="28"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.categories ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#35301D"/><Setter Property="Foreground" Value="#F0CC55"/>
+        </Style>
+    </UserControl.Styles>
+    <Border BorderBrush="#303030" BorderThickness="1" CornerRadius="5">
+        <Grid ColumnDefinitions="132, *">
+            <Border Background="#151515" BorderBrush="#303030" BorderThickness="0,0,1,0" Padding="4,8">
+                <Grid RowDefinitions="*, Auto">
+                    <ListBox x:Name="CategoryList" Classes="categories" AutomationProperties.Name="Management categories"
+                             SelectionChanged="CategoryList_SelectionChanged"/>
+                    <Button x:Name="ReturnButton" Grid.Row="1" Content="Back to launcher" Click="Return_Click" Margin="5,6,0,0"/>
+                </Grid>
+            </Border>
+            <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto">
+                <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="12,6">
+                    <Grid ColumnDefinitions="*, Auto">
+                        <TextBlock x:Name="PageTitle" Text="Instances" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <ComboBox x:Name="InstanceSelector" Grid.Column="1" Width="150" MaxWidth="180" MinHeight="26"
+                                  IsVisible="False" AutomationProperties.Name="Managed instance" SelectionChanged="InstanceSelector_SelectionChanged"/>
+                    </Grid>
+                </Border>
+                <ContentControl x:Name="PageHost" Grid.Row="1" Margin="12" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+                <TextBlock x:Name="WorkspaceStatus" Grid.Row="2" TextWrapping="Wrap" MaxHeight="48" Foreground="#E2B007" FontSize="11" Margin="12,0,12,6"
+                           IsVisible="False" AutomationProperties.LiveSetting="Polite"/>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
