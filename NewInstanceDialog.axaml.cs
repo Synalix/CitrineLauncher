@@ -3,7 +3,6 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CitrineLauncher.Handlers;
 using CitrineLauncher.Models;
-using CmlLib.Core;
 using System;
 using System.IO;
 using System.Linq;
@@ -18,7 +17,7 @@ public partial class NewInstanceDialog : Window
     private PackManifest? _manifest;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _busy, _closed;
-    public NewInstanceDialog(MinecraftLauncher launcher)
+    public NewInstanceDialog()
     {
         InitializeComponent();
         LoaderCombo.ItemsSource = new[] { "Vanilla", "Fabric" }; LoaderCombo.SelectedIndex = 0;
@@ -37,7 +36,6 @@ public partial class NewInstanceDialog : Window
         }
         catch (Exception ex) { if (!_closed) ShowError("Could not load Minecraft versions. You can still select a Modrinth pack. " + ex.Message); }
     }
-    private void LoaderCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) { }
     private async Task SelectPackAsync(string path, bool owned)
     {
         try

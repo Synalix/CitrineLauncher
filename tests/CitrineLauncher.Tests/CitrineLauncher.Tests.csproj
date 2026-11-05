@@ -10,5 +10,6 @@
 <Compile Include="../../Models/GameInstance.cs" Link="GameInstance.cs" />
 <Compile Include="../../Handlers/InstanceModManager.cs" Link="InstanceModManager.cs" />
 <Compile Include="../../Models/InstalledMod.cs" Link="InstalledMod.cs" />
+<Compile Include="../../Handlers/ModDependencyResolver.cs" Link="ModDependencyResolver.cs"/>
 </ItemGroup>
 </Project>

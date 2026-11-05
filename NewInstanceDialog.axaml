@@ -21,8 +21,7 @@
                       Background="#2A2A2A"
                       BorderThickness="0"
                       HorizontalAlignment="Stretch"
-                      Padding="10,8"
-                      SelectionChanged="LoaderCombo_SelectionChanged"/>
+                      Padding="10,8"/>
 
             <!-- Minecraft version (always visible) -->
             <ComboBox x:Name="VersionCombo"

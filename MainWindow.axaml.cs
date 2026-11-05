@@ -120,7 +120,7 @@ namespace CitrineLauncher
 
         private async void BtnNewInstance_Click(object? sender, RoutedEventArgs e)
         {
-            var dialog = new NewInstanceDialog(launcher!);
+            var dialog = new NewInstanceDialog();
             var result = await dialog.ShowDialog<CitrineLauncher.Models.GameInstance?>(this);
             if (result != null)
             {

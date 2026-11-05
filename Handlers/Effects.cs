@@ -22,7 +22,7 @@ namespace CitrineLauncher
             {
                 while (!token.IsCancellationRequested)
                 {
-                    if (Handlers.Settings.Instance.ParticlesEnabled && IsVisible && WindowState != WindowState.Minimized && !SettingsHandler.IsOpen && !Handlers.SkinsHandler.IsOpen)
+                    if (Handlers.Settings.Instance.ParticlesEnabled && IsVisible && IsActive && WindowState != WindowState.Minimized && !SettingsHandler.IsOpen && !Handlers.SkinsHandler.IsOpen)
                     {
                         await Dispatcher.UIThread.InvokeAsync(() =>
                         {

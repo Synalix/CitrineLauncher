@@ -50,4 +50,4 @@ Files: Styles/Shared.axaml, App.axaml, existing AXAML, Handlers/SettingsHandler.
 ### Task 5: Verification and handoff
 - [x] Run portable service and headless tests, Debug/Release Windows cross-builds and win-x64 publish; inspect diff.
 - [x] Record Prism source links/commit, exact test results, existing warnings and remaining Windows runtime validation.
-- [ ] Obtain one independent whole-branch review, address material findings, commit the feature branch without merging.
+- [x] Obtain one independent whole-branch review, address material findings, commit the feature branch without merging.

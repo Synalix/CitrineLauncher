@@ -46,7 +46,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 - Settings are saved in `%AppData%\CitrineLauncher`
 - Both offline and Microsoft accounts are supported. Microsoft login uses the standard OAuth device-code flow via CmlLib.
-- Fabric loader and modpack import (CurseForge/Modrinth) are supported. Vanilla instances use per-instance game directories.
+- Fabric loader and Modrinth modpack import are supported. CurseForge downloads are not currently supported. Vanilla instances use per-instance game directories.
 
 ## License
 

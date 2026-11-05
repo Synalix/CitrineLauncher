@@ -67,7 +67,7 @@ public class UiTests
         // Seed cache to isolate layout from external version services.
         Settings.Instance.CachedGameVersions = new List<string> { "1.21.1" };
         Settings.Instance.GameVersionsCachedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var dialog=new NewInstanceDialog(new CmlLib.Core.MinecraftLauncher()) { Width=440,Height=380 };
+        var dialog=new NewInstanceDialog() { Width=440,Height=380 };
         dialog.Show();dialog.UpdateLayout();
         var browse=dialog.FindControl<Button>("BrowseModrinthButton")!;
         Assert.True(browse.IsEffectivelyVisible);

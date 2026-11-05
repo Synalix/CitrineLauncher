@@ -90,45 +90,28 @@ public sealed class InstanceModManager(ModrinthApi api, HttpClient http)
     public async Task InstallAsync(GameInstance instance, ModrinthVersion selected, CancellationToken ct = default, IProgress<string>? progress = null)
     {
         RequireFabric(instance);
-        var resolved = new Dictionary<string, ModrinthVersion>(StringComparer.Ordinal);
         var installed = List(instance);
-        async Task Resolve(ModrinthVersion version)
+        var resolved = await new ModDependencyResolver(api).ResolveAsync(instance, selected, installed, ct);
+        var finalVersions = installed.Where(m => m.Enabled).Select(m => (m.ProjectId, m.VersionId))
+            .Concat(resolved.Values.Select(v => (ProjectId: (string?)v.ProjectId, VersionId: (string?)v.VersionId))).ToList();
+        static bool Conflicts(ModIncompatibility dependency, string? project, string? id) =>
+            (dependency.ProjectId == null || dependency.ProjectId == project) &&
+            (dependency.VersionId == null || dependency.VersionId == id) &&
+            (dependency.ProjectId != null || dependency.VersionId != null);
+        static ModIncompatibility[] Incompatibilities(ModrinthVersion version) => version.Dependencies
+            .Where(d => d.Type == "incompatible").Select(d => new ModIncompatibility(d.ProjectId, d.VersionId)).ToArray();
+        void Check(string name, ModIncompatibility[] dependencies)
         {
-            ct.ThrowIfCancellationRequested();
-            if (!version.GameVersions.Contains(instance.GameVersion) || !version.Loaders.Contains("fabric"))
-                throw new InvalidDataException($"{version.VersionNumber} does not support Minecraft {instance.GameVersion} / Fabric.");
-            if (resolved.TryGetValue(version.ProjectId, out var previous))
-            {
-                if (previous.VersionId != version.VersionId) throw new InvalidDataException("Conflicting required versions for " + version.ProjectId);
-                return;
-            }
-            if (resolved.Count >= 256) throw new InvalidDataException("Too many required dependencies.");
-            resolved.Add(version.ProjectId, version);
-            foreach (var dep in version.Dependencies.Where(d => d.Type == "required"))
-            {
-                if (dep.ProjectId != null && resolved.TryGetValue(dep.ProjectId, out var seen))
-                {
-                    if (dep.VersionId != null && seen.VersionId != dep.VersionId) throw new InvalidDataException("Conflicting required dependency.");
-                    continue;
-                }
-                var dependency = dep.VersionId != null ? await api.GetVersionAsync(dep.VersionId, ct) : dep.ProjectId != null
-                    ? (await api.GetVersionsAsync(dep.ProjectId, instance.GameVersion, "mod", "fabric", ct)).FirstOrDefault() : null;
-                if (dependency == null) throw new InvalidDataException("No compatible required dependency: " + dep.ProjectId);
-                await Resolve(dependency);
-            }
+            if (dependencies.Any(d => finalVersions.Any(v => Conflicts(d, v.ProjectId, v.VersionId))))
+                throw new InvalidDataException("An installed or required mod is incompatible with " + name + ". Disable or remove the conflicting mod first.");
         }
-        await Resolve(selected);
-        foreach (var version in resolved.Values)
-            foreach (var dependency in version.Dependencies.Where(d => d.Type == "incompatible"))
-            {
-                bool Matches(string? project, string? id) =>
-                    (dependency.ProjectId == null || dependency.ProjectId == project) &&
-                    (dependency.VersionId == null || dependency.VersionId == id) &&
-                    (dependency.ProjectId != null || dependency.VersionId != null);
-                if (installed.Any(m => m.Enabled && Matches(m.ProjectId, m.VersionId)) ||
-                    resolved.Values.Any(v => Matches(v.ProjectId, v.VersionId)))
-                    throw new InvalidDataException("An installed or required mod is incompatible with " + version.FileName + ". Disable or remove the conflicting mod first.");
-            }
+        foreach (var version in resolved.Values) Check(version.FileName, Incompatibilities(version));
+        foreach (var mod in installed.Where(m => m.Enabled && m.VersionId != null))
+        {
+            // Earlier metadata may lack declarations. Retrieve them instead of assuming compatibility.
+            var dependencies = mod.Incompatibilities ?? Incompatibilities(await api.GetVersionAsync(mod.VersionId!, ct));
+            Check(mod.Name, dependencies);
+        }
         var stage = instance.InstanceDirectory + ".mods-" + Guid.NewGuid().ToString("N");
         try
         {
@@ -145,7 +128,7 @@ public sealed class InstanceModManager(ModrinthApi api, HttpClient http)
                 progress?.Report("Downloading " + version.FileName);
                 await VerifiedDownload.FetchAsync(http, [version.DownloadUrl], VerifiedDownload.ContainedPath(stage, version.FileName), version.Sha512, version.Sha1, ct);
                 names.Add(version.FileName);
-                metadata[version.FileName] = new(version.FileName, version.FileName, true, version.ProjectId, version.VersionId);
+                metadata[version.FileName] = new(version.FileName, version.FileName, true, version.ProjectId, version.VersionId, Incompatibilities(version));
             }
             Publish(instance, stage, names, metadata, ct);
         }

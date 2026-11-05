@@ -89,3 +89,39 @@ public class AdditionalDownloadTests
         Assert.Equal(Path.Combine(Path.GetTempPath(),"mods","test.jar"),VerifiedDownload.ContainedPath(Path.GetTempPath(),"mods/test.jar"));
     }
 }
+
+public class StreamingCancellationTests
+{
+    [Fact]
+    public async Task CancellationDuringStreamingPreservesDestinationAndRemovesPartialFile()
+    {
+        var dir=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString());Directory.CreateDirectory(dir);
+        using var cts=new CancellationTokenSource();
+        var stream=new BlockingStream();
+        var http=new HttpClient(new ModrinthTests.FakeHttp(_=>new(HttpStatusCode.OK){Content=new StreamContent(stream)}));
+        var path=Path.Combine(dir,"mod.jar");await File.WriteAllTextAsync(path,"original");
+        try
+        {
+            var download=VerifiedDownload.FetchAsync(http,["https://example.org/file"],path,new string('0',128),null,cts.Token);
+            await stream.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2,Directory.GetFiles(dir).Length);
+            cts.Cancel();await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>download);
+            Assert.Equal("original",await File.ReadAllTextAsync(path));Assert.Single(Directory.GetFiles(dir));
+        }finally{Directory.Delete(dir,true);}
+    }
+    private sealed class BlockingStream:Stream
+    {
+        private bool _first=true;
+        public TaskCompletionSource Waiting{get;}=new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,CancellationToken cancellationToken=default)
+        {
+            if(_first){_first=false;buffer.Span[0]=1;return 1;}
+            Waiting.TrySetResult();await Task.Delay(Timeout.Infinite,cancellationToken);return 0;
+        }
+        public override bool CanRead=>true;public override bool CanSeek=>false;public override bool CanWrite=>false;
+        public override long Length=>throw new NotSupportedException();public override long Position{get=>0;set=>throw new NotSupportedException();}
+        public override int Read(byte[] buffer,int offset,int count)=>throw new NotSupportedException();public override void Flush(){}
+        public override long Seek(long offset,SeekOrigin origin)=>throw new NotSupportedException();public override void SetLength(long value)=>throw new NotSupportedException();
+        public override void Write(byte[] buffer,int offset,int count)=>throw new NotSupportedException();
+    }
+}
