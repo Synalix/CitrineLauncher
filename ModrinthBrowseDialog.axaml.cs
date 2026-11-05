@@ -2,210 +2,180 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CitrineLauncher.Handlers;
+using CitrineLauncher.Models;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Threading;
 
-namespace CitrineLauncher
+namespace CitrineLauncher;
+
+public partial class ModrinthBrowseDialog : Window
 {
-    public partial class ModrinthBrowseDialog : Window
+    private readonly string? _gameVersion;
+    private readonly ModrinthApi _api;
+    private readonly System.Net.Http.HttpClient _http;
+    private readonly GameInstance? _instance;
+    private readonly CancellationTokenSource _lifetime = new();
+    private CancellationTokenSource? _searchCts, _versionCts;
+    private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(350) };
+    private readonly List<ModrinthResultItem> _items = [];
+    private int _generation, _versionGeneration, _total;
+    private bool _busy, _closed;
+    private string ProjectType => _instance == null ? "modpack" : "mod";
+    public record PickResult(string TempFilePath, string PackName, string? GameVersion);
+    public ModrinthBrowseDialog(string? gameVersion = null, GameInstance? instance = null, ModrinthApi? api = null, System.Net.Http.HttpClient? http = null)
     {
-        private readonly string? _gameVersion;
-        private CancellationTokenSource? _cts;
-        private DispatcherTimer? _debounceTimer;
-        private int _searchVersion;
-        private int _searchRunning;
-
-        public record PickResult(string TempFilePath, string PackName, string? GameVersion);
-
-        public ModrinthBrowseDialog(string? gameVersion = null)
+        InitializeComponent(); _gameVersion = gameVersion; _instance = instance;
+        _api = api ?? ModrinthClient.Api; _http = http ?? ModrinthClient.Http;
+        if (instance != null)
         {
-            InitializeComponent();
-            _gameVersion = gameVersion;
-
-            _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
-            _debounceTimer.Tick += (_, _) => { _debounceTimer.Stop(); RunSearch(); };
-            SearchBox.TextChanged += SearchBox_TextChanged;
+            Title = "Add mods from Modrinth"; Heading.Text = Title;
+            Subtitle.Text = $"Fabric · Minecraft {instance.GameVersion} · required dependencies included";
+            ImportButton.Content = "Install";
         }
-
-        // ── Search ─────────────────────────────────────────────────────────────
-
-        private void SearchBox_TextChanged(object? sender, TextChangedEventArgs e)
+        else Subtitle.Text = "Fabric modpacks · choose a pack version before downloading";
+        _debounce.Tick += (_, _) => { _debounce.Stop(); RunSearch(); };
+        SearchBox.TextChanged += (_, _) =>
         {
-            _debounceTimer?.Stop();
-            _debounceTimer?.Start();
+            if (_busy) return;
+            _searchCts?.Cancel(); _versionCts?.Cancel(); _generation++; _versionGeneration++;
+            ImportButton.IsEnabled = false; LoadMoreButton.IsEnabled = false; _debounce.Stop(); _debounce.Start();
+        };
+        Opened += (_, _) => { SearchBox.Focus(); RunSearch(); };
+        Closed += (_, _) =>
+        {
+            _closed = true; _debounce.Stop(); _lifetime.Cancel(); _searchCts?.Cancel(); _versionCts?.Cancel();
+            foreach (var item in _items) item.IconBitmap?.Dispose(); _items.Clear();
+        };
+    }
+    private void SearchBox_KeyDown(object? sender, KeyEventArgs e) { if (e.Key == Key.Enter && !_busy) { _debounce.Stop(); RunSearch(); e.Handled = true; } }
+    private void SearchButton_Click(object? sender, RoutedEventArgs e) { _debounce.Stop(); RunSearch(); }
+    private void ClearButton_Click(object? sender, RoutedEventArgs e) { SearchBox.Text = ""; _debounce.Stop(); RunSearch(); SearchBox.Focus(); }
+    private void LoadMoreButton_Click(object? sender, RoutedEventArgs e) => RunSearch(true);
+    private void RunSearch(bool append = false)
+    {
+        if (_busy || _closed) return;
+        _debounce.Stop(); _searchCts?.Cancel(); _searchCts?.Dispose();
+        _searchCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var generation = ++_generation;
+        _ = SearchAsync(SearchBox.Text?.Trim() ?? "", append, generation, _searchCts.Token);
+    }
+    private async Task SearchAsync(string query, bool append, int generation, CancellationToken ct)
+    {
+        LoadMoreButton.IsEnabled = false;
+        if (!append)
+        {
+            _versionCts?.Cancel(); ++_versionGeneration;
+            ResultsList.ItemsSource = null; VersionCombo.ItemsSource = null; ImportButton.IsEnabled = false;
+            foreach (var item in _items) item.IconBitmap?.Dispose(); _items.Clear();
         }
-
-        private void SearchBox_KeyDown(object? sender, KeyEventArgs e)
+        SetStatus("Searching…");
+        try
         {
-            if (e.Key == Key.Enter)
-            {
-                _debounceTimer?.Stop();
-                RunSearch();
-            }
+            var page = await _api.SearchAsync(query, _gameVersion, ProjectType, "fabric", append ? _items.Count : 0, ct);
+            if (ct.IsCancellationRequested || generation != _generation || _closed) return;
+            var added = new List<ModrinthResultItem>();
+            foreach (var project in page.Projects) { var item = new ModrinthResultItem(project); _items.Add(item); added.Add(item); }
+            _total = page.Total;
+            var selected = ResultsList.SelectedItem;
+            ResultsList.ItemsSource = _items.ToArray(); ResultsList.SelectedItem = selected;
+            SetStatus(_items.Count == 0 ? "No compatible results. Try another search." : $"{_items.Count} of {_total} results");
+            LoadMoreButton.IsVisible = _items.Count < _total; LoadMoreButton.IsEnabled = true;
+            _ = LoadIconsAsync(added, ct);
         }
-
-        private void SearchButton_Click(object? sender, RoutedEventArgs e)
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (generation == _generation && !_closed) { SetStatus("Search failed. Try again. " + ex.Message); LoadMoreButton.IsEnabled = true; } }
+    }
+    private async Task LoadIconsAsync(List<ModrinthResultItem> items, CancellationToken ct)
+    {
+        foreach (var item in items)
         {
-            _debounceTimer?.Stop();
-            RunSearch();
-        }
-
-        private void RunSearch()
-        {
-            var query = SearchBox.Text?.Trim() ?? string.Empty;
-            var version = Interlocked.Increment(ref _searchVersion);
-            _ = SearchAsync(query, version);
-        }
-
-        private async Task SearchAsync(string query, int version)
-        {
-            if (Interlocked.CompareExchange(ref _searchRunning, 1, 0) != 0)
-                return; // already running
+            if (ct.IsCancellationRequested || _closed) return;
+            if (!Uri.TryCreate(item.Project.IconUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https") continue;
             try
             {
-                _cts?.Cancel();
-                _cts?.Dispose();
-                _cts = new CancellationTokenSource();
-                var ct = _cts.Token;
-
-                ImportButton.IsEnabled = false;
-                ResultsList.ItemsSource = null;
-                StatusText.Text = "Searching...";
-                StatusText.IsVisible = true;
-                SearchButton.IsEnabled = false;
-
-                try
-                {
-                    var results = await ModrinthClient.SearchAsync(query, _gameVersion, ct: ct);
-                    if (ct.IsCancellationRequested) return;
-
-                    var items = new List<ModrinthResultItem>();
-                    foreach (var r in results)
-                        items.Add(new ModrinthResultItem(r));
-
-                    ResultsList.ItemsSource = items;
-                    StatusText.Text = results.Count == 0 ? "No results found." : string.Empty;
-                    StatusText.IsVisible = results.Count == 0;
-
-                    _ = LoadIconsAsync(items, ct);
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    StatusText.Text = $"Search failed: {ex.Message}";
-                    StatusText.IsVisible = true;
-                }
-                finally
-                {
-                    SearchButton.IsEnabled = true;
-                }
+                var bytes = await _http.GetByteArrayAsync(uri, ct);
+                using var input = new MemoryStream(bytes); var bitmap = Bitmap.DecodeToWidth(input, 88);
+                if (ct.IsCancellationRequested || _closed) { bitmap.Dispose(); return; }
+                item.IconBitmap = bitmap;
             }
-            finally
-            {
-                Interlocked.Exchange(ref _searchRunning, 0);
-            }
-        }
-
-        private static readonly HttpClient _iconHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-
-        private async Task LoadIconsAsync(List<ModrinthResultItem> items, CancellationToken ct)
-        {
-            foreach (var item in items)
-            {
-                if (ct.IsCancellationRequested) return;
-                if (string.IsNullOrEmpty(item.Project.IconUrl)) continue;
-                try
-                {
-                    var bytes = await _iconHttp.GetByteArrayAsync(item.Project.IconUrl, ct);
-                    using var ms = new MemoryStream(bytes);
-                    item.IconBitmap = new Bitmap(ms);
-                }
-                catch { /* icon is optional */ }
-            }
-        }
-
-        // ── Selection ──────────────────────────────────────────────────────────
-
-        private void ResultsList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
-        {
-            ImportButton.IsEnabled = ResultsList.SelectedItem != null;
-        }
-
-        // ── Import ─────────────────────────────────────────────────────────────
-
-        private async void ImportButton_Click(object? sender, RoutedEventArgs e)
-        {
-            if (ResultsList.SelectedItem is not ModrinthResultItem item) return;
-
-            ImportButton.IsEnabled = false;
-            SearchButton.IsEnabled = false;
-            StatusText.Text = "Fetching version info...";
-            StatusText.IsVisible = true;
-
-            try
-            {
-                var version = await ModrinthClient.GetLatestVersionAsync(item.Project.ProjectId, _gameVersion);
-                if (version is null)
-                {
-                    StatusText.Text = _gameVersion != null
-                        ? $"No compatible version found for Minecraft {_gameVersion}."
-                        : "No downloadable version found.";
-                    ImportButton.IsEnabled = true;
-                    SearchButton.IsEnabled = true;
-                    return;
-                }
-
-                StatusText.Text = "Downloading...";
-                var progress = new Progress<int>(p => StatusText.Text = $"Downloading... {p}%");
-                var tempPath = await ModrinthClient.DownloadToTempAsync(version, progress);
-
-                Close(new PickResult(tempPath, item.Title, version.GameVersion));
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Download failed: {ex.Message}";
-                ImportButton.IsEnabled = true;
-                SearchButton.IsEnabled = true;
-            }
-        }
-
-        private void CancelButton_Click(object? sender, RoutedEventArgs e)
-        {
-            _cts?.Cancel();
-            Close(null);
+            catch (Exception) { /* Catalog artwork is optional. */ }
         }
     }
-
-    // Top-level so Avalonia compiled bindings (x:DataType) can resolve it without nested-type syntax
-    public class ModrinthResultItem : INotifyPropertyChanged
+    private async void ResultsList_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void Notify([CallerMemberName] string? name = null) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
-        public ModrinthClient.ModrinthProject Project { get; }
-        public string Title => Project.Title;
-        public string Description => Project.Description;
-        public string DownloadsText => $"{Project.Downloads:N0} downloads";
-
-        private Bitmap? _iconBitmap;
-        public Bitmap? IconBitmap
+        if (_busy) return;
+        _versionCts?.Cancel(); _versionCts?.Dispose(); _versionCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var ct = _versionCts.Token; var generation = ++_versionGeneration;
+        VersionCombo.ItemsSource = null; ImportButton.IsEnabled = false;
+        if (ResultsList.SelectedItem is not ModrinthResultItem item) return;
+        SetStatus("Loading compatible versions…");
+        try
         {
-            get => _iconBitmap;
-            set { _iconBitmap = value; Notify(); }
+            var versions = await _api.GetVersionsAsync(item.Project.ProjectId, _gameVersion, ProjectType, "fabric", ct);
+            if (ct.IsCancellationRequested || _closed || generation != _versionGeneration) return;
+            VersionCombo.ItemsSource = versions; VersionCombo.SelectedIndex = versions.Count > 0 ? 0 : -1;
+            SetStatus(versions.Count == 0 ? "No compatible downloadable version. Select another project." : "Choose a version, then " + (_instance == null ? "download the pack." : "install the mod."));
         }
-
-        public ModrinthResultItem(ModrinthClient.ModrinthProject project)
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { if (generation == _versionGeneration && !_closed) SetStatus("Could not load versions. Select the project again. " + ex.Message); }
+    }
+    private void VersionCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) => ImportButton.IsEnabled = !_busy && VersionCombo.SelectedItem is ModrinthVersion;
+    private async void ImportButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_busy || ResultsList.SelectedItem is not ModrinthResultItem item || VersionCombo.SelectedItem is not ModrinthVersion version) return;
+        _busy = true; _debounce.Stop(); _searchCts?.Cancel();
+        ImportButton.IsEnabled = false; SearchBox.IsEnabled = false; SearchButton.IsEnabled = false; ClearButton.IsEnabled = false;
+        ResultsList.IsEnabled = false; VersionCombo.IsEnabled = false; LoadMoreButton.IsEnabled = false;
+        string? temp = null;
+        try
         {
-            Project = project;
+            if (_instance != null)
+            {
+                await InstanceModManager.Shared.InstallAsync(_instance, version, _lifetime.Token, new Progress<string>(s => { if (!_closed) SetStatus(s); }));
+                if (!_closed) Close(new PickResult("", item.Title, _gameVersion));
+            }
+            else
+            {
+                temp = Path.Combine(Path.GetTempPath(), "citrine_modrinth_" + Guid.NewGuid().ToString("N") + ".mrpack");
+                SetStatus("Downloading pack…");
+                await VerifiedDownload.FetchAsync(_http, [version.DownloadUrl], temp, version.Sha512, version.Sha1, _lifetime.Token,
+                    new Progress<int>(p => { if (!_closed) SetStatus($"Downloading pack… {p}%"); }));
+                // Validate supported dependencies before returning the selection.
+                var manifest = await PackManifest.ReadArchiveAsync(temp, _lifetime.Token);
+                if (!_closed) { var selected = temp; temp = null; Close(new PickResult(selected, item.Title, manifest.GameVersion)); }
+            }
+        }
+        catch (OperationCanceledException) { if (!_closed) SetStatus("Cancelled."); }
+        catch (Exception ex) { if (!_closed) SetStatus("Installation failed. You can retry. " + ex.Message); }
+        finally
+        {
+            if (temp != null) File.Delete(temp);
+            _busy = false;
+            if (!_closed)
+            {
+                SearchBox.IsEnabled = true; SearchButton.IsEnabled = true; ClearButton.IsEnabled = true; ResultsList.IsEnabled = true;
+                VersionCombo.IsEnabled = true; LoadMoreButton.IsEnabled = true; ImportButton.IsEnabled = VersionCombo.SelectedItem != null;
+            }
         }
     }
+    private void SetStatus(string text) { StatusText.Text = text; StatusText.IsVisible = true; }
+    private void CancelButton_Click(object? sender, RoutedEventArgs e) { _lifetime.Cancel(); Close(null); }
+}
+
+public class ModrinthResultItem(ModrinthProject project) : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public ModrinthProject Project { get; } = project;
+    public string Title => Project.Title;
+    public string Description => Project.Description;
+    public string DownloadsText => $"{Project.Downloads:N0} downloads";
+    private Bitmap? _icon;
+    public Bitmap? IconBitmap { get => _icon; set { _icon = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IconBitmap))); } }
 }

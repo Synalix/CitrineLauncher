@@ -50,6 +50,7 @@ namespace CitrineLauncher
             btnSkins.Click += BtnSkins_Click;
             addAccountButton.Click += AddAccountButton_Click;
             btnNewInstance.Click += BtnNewInstance_Click;
+            btnMods.Click += BtnMods_Click;
             btnDeleteInstance.Click += BtnDeleteInstance_Click;
 
             accountCombo.SelectionChanged += (s, e) =>
@@ -62,7 +63,8 @@ namespace CitrineLauncher
             cbInstances.SelectionChanged += (s, e) =>
             {
                 UpdateLaunchButtonState();
-                btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null;
+                btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
+                btnMods.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
             };
 
             // 4. Window controls
@@ -104,7 +106,16 @@ namespace CitrineLauncher
             if (instances.Count > 0)
                 cbInstances.SelectedIndex = 0;
             UpdateLaunchButtonState();
-            btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null;
+            btnDeleteInstance.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
+            btnMods.IsEnabled = cbInstances.SelectedItem != null && !_launchBusy;
+        }
+
+        private async void BtnMods_Click(object? sender, RoutedEventArgs e)
+        {
+            if (_launchBusy || cbInstances.SelectedItem is not CitrineLauncher.Models.GameInstance instance) return;
+            btnLaunch.IsEnabled = false;
+            try { await new ModsDialog(instance).ShowDialog(this); }
+            finally { UpdateLaunchButtonState(); }
         }
 
         private async void BtnNewInstance_Click(object? sender, RoutedEventArgs e)
@@ -171,7 +182,9 @@ namespace CitrineLauncher
 
         private void UpdateLaunchButtonState()
         {
-            btnLaunch.IsEnabled = accountCombo.SelectedItem != null && cbInstances.SelectedItem != null;
+            btnLaunch.IsEnabled = !_launchBusy && accountCombo.SelectedItem != null && cbInstances.SelectedItem != null;
+            btnMods.IsEnabled = btnDeleteInstance.IsEnabled = !_launchBusy && cbInstances.SelectedItem != null;
+            cbInstances.IsEnabled = btnNewInstance.IsEnabled = !_launchBusy;
         }
 
         private void UpdateTitleText()

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable><AssemblyName>CitrineLauncher</AssemblyName><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault></PropertyGroup>
+<ItemGroup><PackageReference Include="Avalonia" Version="11.3.11" />
+    
+<PackageReference Include="Avalonia.Controls.WebView" Version="11.4.0" />
+    
+<PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
+    
+<PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
+    
+<PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.11" />
+    
+<PackageReference Include="CmlLib.Core" Version="4.0.6" />
+    
+<PackageReference Include="CmlLib.Core.Auth.Microsoft" Version="3.3.1" />
+  
+<PackageReference Include="Avalonia.Headless.XUnit" Version="11.3.11"/>
+<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+<PackageReference Include="xunit" Version="2.9.3"/>
+<PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+<Compile Include="../../*.cs" Link="%(Filename)%(Extension)"/>
+<Compile Include="../../Handlers/*.cs" Link="Handlers/%(Filename)%(Extension)"/>
+<Compile Include="../../Models/*.cs" Link="Models/%(Filename)%(Extension)"/>
+<AvaloniaXaml Include="../../*.axaml" Link="%(Filename)%(Extension)"/>
+<AvaloniaXaml Include="../../Styles/*.axaml" Link="Styles/%(Filename)%(Extension)"/>
+<EmbeddedResource Include="../../Assets/skinview3d.min.js" LogicalName="CitrineLauncher.Assets.skinview3d.min.js"/>
+<Compile Remove="../../Handlers/Program.cs"/>
+</ItemGroup></Project>

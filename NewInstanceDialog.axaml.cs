@@ -1,230 +1,128 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Avalonia.Threading;
 using CitrineLauncher.Handlers;
 using CitrineLauncher.Models;
 using CmlLib.Core;
 using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
-namespace CitrineLauncher
+namespace CitrineLauncher;
+
+public partial class NewInstanceDialog : Window
 {
-    public partial class NewInstanceDialog : Window
+    private string? _packPath, _ownedTemp;
+    private PackManifest? _manifest;
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _busy, _closed;
+    public NewInstanceDialog(MinecraftLauncher launcher)
     {
-        private readonly MinecraftLauncher _launcher;
-        private string? _modpackPath;
-        private string? _modpackName; // set when importing from Modrinth browse
-
-        public NewInstanceDialog(MinecraftLauncher launcher)
+        InitializeComponent();
+        LoaderCombo.ItemsSource = new[] { "Vanilla", "Fabric" }; LoaderCombo.SelectedIndex = 0;
+        Closing += (_, e) => { if (_busy) { e.Cancel = true; _lifetime.Cancel(); } };
+        Closed += (_, _) => { _closed = true; _lifetime.Cancel(); CleanupTemp(); };
+        _ = LoadVersionsAsync();
+    }
+    private void CleanupTemp() { if (_ownedTemp != null) { try { File.Delete(_ownedTemp); } catch (IOException) { } _ownedTemp = null; } }
+    private async Task LoadVersionsAsync()
+    {
+        try
         {
-            InitializeComponent();
-            _launcher = launcher;
-
-            LoaderCombo.ItemsSource = new[] { "Vanilla", "Fabric" };
-            LoaderCombo.SelectedIndex = 0;
-
-            _ = LoadVersionsAsync().ContinueWith(t =>
-            {
-                if (t.IsFaulted)
-                    System.Diagnostics.Debug.WriteLine($"LoadVersionsAsync: {t.Exception?.InnerException?.Message}");
-            }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+            var versions = await GameVersionCache.GetReleaseVersionsAsync();
+            if (_closed || _manifest != null) return;
+            VersionCombo.ItemsSource = versions; VersionCombo.SelectedIndex = versions.Count > 0 ? 0 : -1;
         }
-
-        private async Task LoadVersionsAsync()
+        catch (Exception ex) { if (!_closed) ShowError("Could not load Minecraft versions. You can still select a Modrinth pack. " + ex.Message); }
+    }
+    private void LoaderCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) { }
+    private async Task SelectPackAsync(string path, bool owned)
+    {
+        try
         {
-            // Show cached versions immediately for instant load
-            var cached = GameVersionCache.GetCached();
-            if (cached.Count > 0)
-            {
-                VersionCombo.ItemsSource = cached;
-                VersionCombo.SelectedIndex = 0;
-            }
-
-            // Then refresh in background if needed
-            if (GameVersionCache.NeedsRefresh())
-            {
-                CreateButton.IsEnabled = false;
-                StatusText.Text = "Loading versions...";
-                StatusText.IsVisible = true;
-                try
-                {
-                    var versions = await GameVersionCache.GetReleaseVersionsAsync();
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        VersionCombo.ItemsSource = versions;
-                        if (versions.Count > 0)
-                            VersionCombo.SelectedIndex = 0;
-                        StatusText.IsVisible = false;
-                        CreateButton.IsEnabled = true;
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        if (cached.Count == 0)
-                        {
-                            ErrorText.Text = $"Failed to load versions: {ex.Message}";
-                            ErrorText.IsVisible = true;
-                        }
-                        StatusText.IsVisible = false;
-                        CreateButton.IsEnabled = true;
-                    });
-                }
-            }
-            else
-            {
-                CreateButton.IsEnabled = true;
-            }
+            var manifest = await PackManifest.ReadArchiveAsync(path, _lifetime.Token);
+            CleanupTemp(); _ownedTemp = owned ? path : null; _packPath = path; _manifest = manifest;
+            ModpackPathBox.Text = manifest.Name; NameInput.Text = manifest.Name;
+            VersionCombo.ItemsSource = new[] { manifest.GameVersion }; VersionCombo.SelectedIndex = 0;
+            LoaderCombo.SelectedItem = manifest.Loader == LoaderType.Fabric ? "Fabric" : "Vanilla";
+            VersionCombo.IsEnabled = false; LoaderCombo.IsEnabled = false;
+            IncludeOptionalCheck.IsVisible = manifest.Files.Any(f => f.Optional);
+            StatusText.Text = $"Minecraft {manifest.GameVersion} · {manifest.Loader} {manifest.LoaderVersion}"; StatusText.IsVisible = true;
+            ErrorText.IsVisible = false;
         }
-
-        private void LoaderCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        catch (Exception ex)
         {
-            var isFabric = LoaderCombo.SelectedItem?.ToString() == "Fabric";
-            ModpackRow.IsVisible = isFabric;
-            NameInput.IsVisible = isFabric;
-
-            // Clear modpack selection when switching away from Fabric
-            if (!isFabric)
-            {
-                _modpackPath = null;
-                _modpackName = null;
-                ModpackPathBox.Text = string.Empty;
-                NameInput.Text = string.Empty;
-            }
+            if (owned) File.Delete(path);
+            ShowError("Cannot select pack. " + ex.Message);
         }
-
-        private async void BrowseModpackButton_Click(object? sender, RoutedEventArgs e)
+    }
+    private async void BrowseModpackButton_Click(object? sender, RoutedEventArgs e)
+    {
+        try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Select Modpack",
+                Title = "Select Modrinth pack",
                 AllowMultiple = false,
-                FileTypeFilter = new[]
-                {
-                    new FilePickerFileType("Modpack files") { Patterns = new[] { "*.zip", "*.mrpack" } }
-                }
+                FileTypeFilter = new[] { new FilePickerFileType("Modrinth packs") { Patterns = new[] { "*.mrpack", "*.zip" } } }
             });
-
-            if (files.Count > 0)
-            {
-                _modpackPath = files[0].TryGetLocalPath();
-                _modpackName = null;
-                ModpackPathBox.Text = _modpackPath ?? string.Empty;
-            }
+            if (files.Count > 0 && files[0].TryGetLocalPath() is string path) await SelectPackAsync(path, false);
         }
-
-        private async void BrowseModrinthButton_Click(object? sender, RoutedEventArgs e)
+        catch (Exception ex) { ShowError("Could not open pack. " + ex.Message); }
+    }
+    private async void BrowseModrinthButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new ModrinthBrowseDialog(); // Pack declares Minecraft and loader versions, not the manual selection.
+        var result = await dialog.ShowDialog<ModrinthBrowseDialog.PickResult?>(this);
+        if (result != null) await SelectPackAsync(result.TempFilePath, true);
+    }
+    private async void ClearPackButton_Click(object? sender, RoutedEventArgs e)
+    {
+        CleanupTemp(); _packPath = null; _manifest = null; ModpackPathBox.Text = ""; NameInput.Text = "";
+        LoaderCombo.IsEnabled = true; VersionCombo.IsEnabled = true; IncludeOptionalCheck.IsVisible = false; StatusText.IsVisible = false;
+        await LoadVersionsAsync();
+    }
+    private void CancelButton_Click(object? sender, RoutedEventArgs e) { if (_busy) { _lifetime.Cancel(); return; } Close(null); }
+    private void ShowError(string text) { ErrorText.Text = text; ErrorText.IsVisible = true; }
+    private async void CreateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        ErrorText.IsVisible = false;
+        if (_lifetime.IsCancellationRequested) { ShowError("Creation cancelled. Close this dialog and reopen it to try again."); return; }
+        var game = _manifest?.GameVersion ?? VersionCombo.SelectedItem?.ToString();
+        if (string.IsNullOrEmpty(game)) { ShowError("Select a Minecraft version or a Modrinth pack."); VersionCombo.Focus(); return; }
+        var loader = _manifest?.Loader ?? (LoaderCombo.SelectedItem?.ToString() == "Fabric" ? LoaderType.Fabric : LoaderType.Vanilla);
+        var name = string.IsNullOrWhiteSpace(NameInput.Text) ? _manifest?.Name ?? game : NameInput.Text.Trim();
+        GameInstance? instance = null; _busy = true; FormPanel.IsEnabled = false; CreateButton.IsEnabled = false;
+        try
         {
-            var gameVersion = VersionCombo.SelectedItem?.ToString();
-            var dialog = new ModrinthBrowseDialog(gameVersion);
-            var result = await dialog.ShowDialog<ModrinthBrowseDialog.PickResult?>(this);
-            if (result is null) return;
-
-            _modpackPath = result.TempFilePath;
-            _modpackName = result.PackName;
-            ModpackPathBox.Text = result.PackName;
-
-            // Pre-fill name from pack title if user hasn't typed one
-            if (string.IsNullOrWhiteSpace(NameInput.Text))
-                NameInput.Text = result.PackName;
-
-            // Switch to the pack's game version if available
-            if (!string.IsNullOrEmpty(result.GameVersion))
+            var loaderVersion = _manifest?.LoaderVersion ?? "";
+            if (loader == LoaderType.Fabric && _manifest == null)
             {
-                var items = VersionCombo.ItemsSource as IList<string>;
-                if (items != null && items.Contains(result.GameVersion))
-                    VersionCombo.SelectedItem = result.GameVersion;
+                StatusText.Text = "Resolving Fabric loader…"; StatusText.IsVisible = true;
+                var versions = await InstanceManager.GetFabricLoaderVersionsAsync(game);
+                loaderVersion = versions.FirstOrDefault() ?? throw new InvalidOperationException("No compatible Fabric loader is available.");
             }
+            _lifetime.Token.ThrowIfCancellationRequested();
+            instance = InstanceManager.Instance.CreateInstance(name, game, loader, loaderVersion);
+            if (_packPath != null)
+            {
+                StatusText.IsVisible = true;
+                var result = await ModpackImporter.ImportFromZipAsync(_packPath, instance, _lifetime.Token,
+                    new Progress<string>(s => { if (!_closed) StatusText.Text = s; }), IncludeOptionalCheck.IsChecked != false);
+                if (!result.Success) throw new InvalidDataException(result.Message);
+            }
+            _busy = false; Close(instance); instance = null;
         }
-
-        private void CancelButton_Click(object? sender, RoutedEventArgs e) => Close(null);
-
-        private async void CreateButton_Click(object? sender, RoutedEventArgs e)
+        catch (OperationCanceledException) { ShowError("Creation cancelled. Close this dialog and reopen it to try again."); }
+        catch (Exception ex) { ShowError("Could not create instance. " + ex.Message); }
+        finally
         {
-            ErrorText.IsVisible = false;
-            StatusText.IsVisible = false;
-
-            var gameVersion = VersionCombo.SelectedItem?.ToString() ?? string.Empty;
-            var loaderStr = LoaderCombo.SelectedItem?.ToString() ?? "Vanilla";
-            var loader = loaderStr == "Fabric" ? LoaderType.Fabric : LoaderType.Vanilla;
-
-            if (string.IsNullOrEmpty(gameVersion))
-            {
-                ErrorText.Text = "Please select a Minecraft version.";
-                ErrorText.IsVisible = true;
-                return;
-            }
-
-            // Determine instance name
-            string name;
-            if (loader == LoaderType.Fabric)
-            {
-                // Use typed name, fall back to pack name, fall back to version
-                name = NameInput.Text?.Trim() ?? string.Empty;
-                if (string.IsNullOrEmpty(name))
-                    name = _modpackName ?? gameVersion;
-            }
-            else
-            {
-                // Vanilla: auto-name from version
-                name = gameVersion;
-            }
-
-            string loaderVersion = string.Empty;
-
-            if (loader == LoaderType.Fabric)
-            {
-                CreateButton.IsEnabled = false;
-                StatusText.Text = "Resolving Fabric loader version...";
-                StatusText.IsVisible = true;
-                try
-                {
-                    var fabricVersions = await InstanceManager.GetFabricLoaderVersionsAsync(gameVersion);
-                    if (fabricVersions.Count == 0)
-                        throw new InvalidOperationException($"No Fabric loader found for Minecraft {gameVersion}.");
-                    loaderVersion = fabricVersions[0];
-                    StatusText.IsVisible = false;
-                }
-                catch (Exception ex)
-                {
-                    StatusText.IsVisible = false;
-                    ErrorText.Text = $"Could not fetch Fabric loader: {ex.Message}";
-                    ErrorText.IsVisible = true;
-                    CreateButton.IsEnabled = true;
-                    return;
-                }
-            }
-
-            var instance = InstanceManager.Instance.CreateInstance(name, gameVersion, loader, loaderVersion);
-
-            // Import modpack if one was selected
-            if (!string.IsNullOrEmpty(_modpackPath))
-            {
-                CreateButton.IsEnabled = false;
-                StatusText.Text = "Importing modpack...";
-                StatusText.IsVisible = true;
-
-                var result = await ModpackImporter.ImportFromZipAsync(_modpackPath, instance);
-
-                StatusText.IsVisible = false;
-
-                if (!result.Success)
-                {
-                    ErrorText.Text = $"Modpack import failed: {result.Message}";
-                    ErrorText.IsVisible = true;
-                    // Instance was created — still close so user isn't stuck
-                }
-                else if (result.DetectedGameVersion != null && result.DetectedGameVersion != gameVersion)
-                {
-                    StatusText.Text = $"Note: pack targets {result.DetectedGameVersion}";
-                    StatusText.IsVisible = true;
-                }
-            }
-
-            Close(instance);
+            if (instance != null) InstanceManager.Instance.DeleteInstance(instance);
+            _busy = false;
+            if (!_closed) { FormPanel.IsEnabled = true; CreateButton.IsEnabled = !_lifetime.IsCancellationRequested; StatusText.IsVisible = false; }
         }
     }
 }

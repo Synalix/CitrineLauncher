@@ -19,6 +19,14 @@ namespace CitrineLauncher
         {
             InitializeComponent();
             SetupControls();
+            KeyDown += (_, e) =>
+            {
+                if (e.Key == Avalonia.Input.Key.Escape)
+                {
+                    e.Handled = true;
+                    CloseRequested?.Invoke(this, EventArgs.Empty);
+                }
+            };
         }
 
         private void SetupControls()
@@ -218,9 +226,9 @@ namespace CitrineLauncher
             };
 
             // Navigation buttons
-            GeneralNav.Click     += (s, e) => ShowSection("General");
-            AccountsNav.Click    += (s, e) => ShowSection("Accounts");
-            AppearanceNav.Click  += (s, e) => ShowSection("Appearance");
+            GeneralNav.Click += (s, e) => ShowSection("General");
+            AccountsNav.Click += (s, e) => ShowSection("Accounts");
+            AppearanceNav.Click += (s, e) => ShowSection("Appearance");
             PerformanceNav.Click += (s, e) => ShowSection("Performance");
 
             // Close button
@@ -296,8 +304,8 @@ namespace CitrineLauncher
 
         public void ShowSection(string sectionName)
         {
-            GeneralSection.IsVisible    = sectionName == "General";
-            AccountsSection.IsVisible   = sectionName == "Accounts";
+            GeneralSection.IsVisible = sectionName == "General";
+            AccountsSection.IsVisible = sectionName == "Accounts";
             AppearanceSection.IsVisible = sectionName == "Appearance";
             PerformanceSection.IsVisible = sectionName == "Performance";
 

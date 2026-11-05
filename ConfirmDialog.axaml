@@ -2,23 +2,25 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="CitrineLauncher.ConfirmDialog"
         Title="Confirm"
-        Width="360" Height="160"
+        Width="420" Height="240" MinWidth="360" MinHeight="220"
         WindowStartupLocation="CenterOwner"
         Background="#1E1E1E"
         Foreground="White"
-        CanResize="False">
+        CanResize="True">
 
     <Grid Margin="24,20" RowDefinitions="Auto, *, Auto">
-        <TextBlock x:Name="TitleText" FontSize="14" FontWeight="SemiBold"
+        <TextBlock MaxLines="2" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" x:Name="TitleText" FontSize="14" FontWeight="SemiBold"
                    Foreground="#FF6B6B" Margin="0,0,0,8"/>
 
-        <TextBlock x:Name="BodyText" Grid.Row="1"
+        <ScrollViewer Grid.Row="1" Margin="0,0,0,16">
+        <TextBlock x:Name="BodyText"
                    FontSize="12" Foreground="#CCCCCC"
                    TextWrapping="Wrap" VerticalAlignment="Top"/>
+        </ScrollViewer>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" Spacing="8">
-            <Button x:Name="CancelButton" Content="Cancel" Width="80" Height="32"
+            <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Width="80" Height="32"
                     Background="#2A2A2A" Foreground="White" CornerRadius="6"
                     Click="CancelButton_Click"/>
             <Button x:Name="ConfirmButton" Content="Delete" Width="80" Height="32"

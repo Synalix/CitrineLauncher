@@ -17,6 +17,8 @@ namespace CitrineLauncher
 {
     public partial class MainWindow
     {
+        private bool _launchBusy;
+
         private MinecraftLauncher ConfigureLauncher(string minecraftPath)
         {
             var path = new MinecraftPath(minecraftPath);
@@ -53,6 +55,7 @@ namespace CitrineLauncher
 
         private async void BtnLaunch_Click(object? sender, RoutedEventArgs e)
         {
+            if (_launchBusy) return;
             string username = Handlers.Settings.Instance.Username;
 
             if (string.IsNullOrEmpty(username) || cbInstances.SelectedItem is not GameInstance instance) return;
@@ -61,7 +64,8 @@ namespace CitrineLauncher
                 Debug.WriteLine("Launch aborted: launcher not initialized");
                 return;
             }
-            btnLaunch.IsEnabled = false;
+            _launchBusy = true;
+            UpdateLaunchButtonState();
 
             try
             {
@@ -100,7 +104,8 @@ namespace CitrineLauncher
                         {
                             Debug.WriteLine($"Launch aborted: re-authenticated session '{cached.Username}' does not match selected account '{username}'");
                             lblStatus.Text = "Launch Failed — account mismatch";
-                            btnLaunch.IsEnabled = true;
+                            _launchBusy = false;
+                            UpdateLaunchButtonState();
                             return;
                         }
                     }
@@ -174,7 +179,7 @@ namespace CitrineLauncher
                 currentGameProcess = process;
                 currentGameProcess.EnableRaisingEvents = true;
                 currentGameProcess.Exited += GameProcess_Exited;
-                process.Start();
+                if (!process.Start()) throw new InvalidOperationException("Could not start Minecraft.");
                 lblStatus.Text = "Game Running...";
 
                 if (settings.MinimizeOnLaunch)
@@ -184,7 +189,8 @@ namespace CitrineLauncher
             {
                 Debug.WriteLine($"Launch error: {ex.Message}");
                 lblStatus.Text = "Launch Failed";
-                btnLaunch.IsEnabled = true;
+                _launchBusy = false;
+                UpdateLaunchButtonState();
             }
         }
 
@@ -196,7 +202,8 @@ namespace CitrineLauncher
             {
                 if (!IsLoaded) return;
                 lblStatus.Text = "Ready to Play";
-                btnLaunch.IsEnabled = true;
+                _launchBusy = false;
+                UpdateLaunchButtonState();
                 currentGameProcess?.Dispose();
                 currentGameProcess = null;
             });

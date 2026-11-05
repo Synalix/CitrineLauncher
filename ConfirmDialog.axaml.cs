@@ -10,6 +10,7 @@ namespace CitrineLauncher
             InitializeComponent();
             TitleText.Text = title;
             BodyText.Text = body;
+            Opened += (_, _) => CancelButton.Focus();
         }
 
         private void CancelButton_Click(object? sender, RoutedEventArgs e) => Close(false);

@@ -3,245 +3,124 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
-namespace CitrineLauncher.Handlers
+namespace CitrineLauncher.Handlers;
+
+public record PackFile(string Path, string[] Downloads, string? Sha512, string? Sha1, bool Optional);
+public record PackManifest(string Name, string GameVersion, LoaderType Loader, string LoaderVersion, List<PackFile> Files)
 {
-    /// <summary>
-    /// Imports a local modpack zip or folder into an existing GameInstance directory.
-    /// Supports CurseForge manifest.json and Modrinth modrinth.index.json layouts.
-    /// File downloading is NOT done here — only the files already present in the pack are copied.
-    /// </summary>
-    public static class ModpackImporter
+    public static PackManifest Parse(string json)
     {
-        public record ImportResult(bool Success, string Message, string? DetectedGameVersion = null);
-
-        /// <summary>
-        /// Import from a zip file. Extracts to a temp folder, then delegates to ImportFromFolder.
-        /// Handles both .zip and .mrpack (Modrinth modpack) formats.
-        /// </summary>
-        public static async Task<ImportResult> ImportFromZipAsync(string zipPath, GameInstance target)
+        using var doc = JsonDocument.Parse(json); var root = doc.RootElement;
+        if (root.GetProperty("formatVersion").GetInt32() != 1 || root.GetProperty("game").GetString() != "minecraft")
+            throw new InvalidDataException("Only Minecraft Modrinth format version 1 is supported.");
+        var deps = root.GetProperty("dependencies");
+        foreach (var dep in deps.EnumerateObject())
+            if (dep.Name is not ("minecraft" or "fabric-loader"))
+                throw new InvalidDataException($"This pack needs {dep.Name}. Citrine currently supports Vanilla and Fabric packs.");
+        var mc = deps.GetProperty("minecraft").GetString();
+        if (string.IsNullOrWhiteSpace(mc)) throw new InvalidDataException("Pack has no Minecraft version.");
+        var fabric = deps.TryGetProperty("fabric-loader", out var fv) ? fv.GetString() : null;
+        if (fabric != null && string.IsNullOrWhiteSpace(fabric)) throw new InvalidDataException("Pack has no Fabric loader version.");
+        var files = new List<PackFile>(); var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in root.GetProperty("files").EnumerateArray())
         {
-            if (!File.Exists(zipPath))
-                return new ImportResult(false, $"File not found: {zipPath}");
-
-            var tempDir = Path.Combine(Path.GetTempPath(), "citrine_import_" + Guid.NewGuid().ToString("N"));
-            try
-            {
-                Directory.CreateDirectory(tempDir);
-                
-                await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, tempDir, overwriteFiles: true));
-                
-                return await ImportFromFolderAsync(tempDir, target);
-            }
-            catch (Exception ex)
-            {
-                return new ImportResult(false, $"Failed to extract modpack: {ex.Message}");
-            }
-            finally
-            {
-                try { Directory.Delete(tempDir, recursive: true); } catch { }
-            }
+            if (entry.TryGetProperty("env", out var env) && env.TryGetProperty("client", out var client) && client.GetString() == "unsupported") continue;
+            var path = entry.GetProperty("path").GetString()!;
+            ValidateContentPath(path);
+            if (!paths.Add(path.Replace('\\', '/'))) throw new InvalidDataException("Duplicate pack path: " + path);
+            var hashes = entry.GetProperty("hashes");
+            var urls = entry.GetProperty("downloads").EnumerateArray().Select(e => e.GetString()!).ToArray();
+            if (urls.Length == 0) throw new InvalidDataException("Missing download URL: " + path);
+            var sha512 = hashes.TryGetProperty("sha512", out var h512) ? h512.GetString() : null;
+            var sha1 = hashes.TryGetProperty("sha1", out var h1) ? h1.GetString() : null;
+            if (string.IsNullOrEmpty(sha512) && string.IsNullOrEmpty(sha1)) throw new InvalidDataException("Missing file checksum: " + path);
+            var optional = entry.TryGetProperty("env", out env) && env.TryGetProperty("client", out client) && client.GetString() == "optional";
+            files.Add(new(path, urls, sha512, sha1, optional));
         }
+        return new(root.TryGetProperty("name", out var name) ? name.GetString() ?? "Modpack" : "Modpack", mc, fabric == null ? LoaderType.Vanilla : LoaderType.Fabric, fabric ?? "", files);
+    }
+    public static void ValidateContentPath(string path)
+    {
+        VerifiedDownload.ContainedPath(System.IO.Path.GetTempPath(), path);
+        var first = path.Replace('\\', '/').Split('/')[0];
+        if (first.Equals("instance.json", StringComparison.OrdinalIgnoreCase) || first.Equals("pack-meta.json", StringComparison.OrdinalIgnoreCase) || first.Equals("citrine-mods.json", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Pack cannot replace launcher metadata.");
+    }
+    public static async Task<PackManifest> ReadArchiveAsync(string path, CancellationToken ct = default)
+    {
+        using var zip = ZipFile.OpenRead(path);
+        var entry = zip.GetEntry("modrinth.index.json");
+        if (entry == null) throw new InvalidDataException("Select a Modrinth .mrpack containing modrinth.index.json. CurseForge downloads are not supported.");
+        using var reader = new StreamReader(entry.Open());
+        return Parse(await reader.ReadToEndAsync(ct));
+    }
+}
 
-        /// <summary>
-        /// Import from an already-extracted folder. Detects pack format and copies files.
-        /// Searches root and one level deep to handle packs wrapped in a single top-level folder.
-        /// </summary>
-        public static async Task<ImportResult> ImportFromFolderAsync(string sourceFolder, GameInstance target)
+public static class ModpackImporter
+{
+    public record ImportResult(bool Success, string Message, string? DetectedGameVersion = null);
+    public static Task<ImportResult> ImportFromZipAsync(string path, GameInstance target, CancellationToken ct = default, IProgress<string>? progress = null, bool includeOptional = true) =>
+        new PackInstaller(ModrinthClient.Http).ImportAsync(path, target, ct, progress, includeOptional);
+}
+
+/// <summary>Imports a complete client pack into a fresh instance using a staging directory.</summary>
+public sealed class PackInstaller(HttpClient http)
+{
+    public async Task<ModpackImporter.ImportResult> ImportAsync(string path, GameInstance target, CancellationToken ct = default, IProgress<string>? progress = null, bool includeOptional = true)
+    {
+        var stage = target.InstanceDirectory + ".import-" + Guid.NewGuid().ToString("N");
+        var backup = stage + ".previous";
+        var published = false;
+        try
         {
-            if (!Directory.Exists(sourceFolder))
-                return new ImportResult(false, $"Folder not found: {sourceFolder}");
-
-            var packRoot = FindPackRoot(sourceFolder);
-
-            // Try CurseForge format first
-            var curseForgeMeta = Path.Combine(packRoot, "manifest.json");
-            if (File.Exists(curseForgeMeta))
-                return await ImportCurseForgeAsync(packRoot, curseForgeMeta, target);
-
-            // Try Modrinth format
-            var modrinthMeta = Path.Combine(packRoot, "modrinth.index.json");
-            if (File.Exists(modrinthMeta))
-                return await ImportModrinthAsync(packRoot, modrinthMeta, target);
-
-            // Unknown format — copy everything as-is
-            return await CopyOverridesAsync(packRoot, target.InstanceDirectory, "unknown");
-        }
-
-        /// <summary>
-        /// Returns the folder that directly contains a known manifest file,
-        /// checking the root and one subfolder deep.
-        /// </summary>
-        private static string FindPackRoot(string sourceFolder)
-        {
-            if (File.Exists(Path.Combine(sourceFolder, "manifest.json")) ||
-                File.Exists(Path.Combine(sourceFolder, "modrinth.index.json")))
-                return sourceFolder;
-
-            foreach (var sub in Directory.GetDirectories(sourceFolder))
+            var manifest = await PackManifest.ReadArchiveAsync(path, ct);
+            if (manifest.GameVersion != target.GameVersion || manifest.Loader != target.Loader || manifest.LoaderVersion != target.LoaderVersion)
+                throw new InvalidDataException("Instance Minecraft/loader version must match the pack manifest.");
+            if (Directory.Exists(target.InstanceDirectory) && Directory.EnumerateFileSystemEntries(target.InstanceDirectory).Any(p => System.IO.Path.GetFileName(p) != "instance.json"))
+                throw new InvalidDataException("Import requires a new, empty instance.");
+            Directory.CreateDirectory(stage);
+            var files = manifest.Files.Where(f => includeOptional || !f.Optional).ToList();
+            var completed = 0;
+            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
             {
-                if (File.Exists(Path.Combine(sub, "manifest.json")) ||
-                    File.Exists(Path.Combine(sub, "modrinth.index.json")))
-                    return sub;
-            }
-
-            return sourceFolder;
-        }
-
-        // ── CurseForge ─────────────────────────────────────────────────────────
-
-        private static async Task<ImportResult> ImportCurseForgeAsync(
-            string sourceFolder, string metaPath, GameInstance target)
-        {
-            try
-            {
-                var json = await File.ReadAllTextAsync(metaPath);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                var gameVersion = root.TryGetProperty("minecraft", out var mc)
-                    ? mc.TryGetProperty("version", out var ver) ? ver.GetString() : null
-                    : null;
-
-                // Copy overrides/ subfolder into instance directory
-                var overridesDir = Path.Combine(sourceFolder, "overrides");
-                ImportResult copyResult;
-                if (Directory.Exists(overridesDir))
-                    copyResult = await CopyOverridesAsync(overridesDir, target.InstanceDirectory, "CurseForge");
-                else
-                    copyResult = new ImportResult(true, "No overrides folder found (mods must be downloaded separately).");
-
-                // Write pack metadata so we can show it later
-                await WritePackMetaAsync(target, "curseforge", root);
-
-                var msg = copyResult.Success
-                    ? $"CurseForge pack imported. Game version: {gameVersion ?? "unknown"}. Note: mods must be downloaded separately."
-                    : copyResult.Message;
-
-                return new ImportResult(copyResult.Success, msg, gameVersion);
-            }
-            catch (Exception ex)
-            {
-                return new ImportResult(false, $"CurseForge import failed: {ex.Message}");
-            }
-        }
-
-        // ── Modrinth ───────────────────────────────────────────────────────────
-
-        private static readonly HttpClient _http = new HttpClient
-        {
-            DefaultRequestHeaders = { { "User-Agent", "CitrineLauncher/1.0" } },
-            Timeout = TimeSpan.FromSeconds(60)
-        };
-
-        private static async Task<ImportResult> ImportModrinthAsync(
-            string sourceFolder, string metaPath, GameInstance target)
-        {
-            try
-            {
-                var json = await File.ReadAllTextAsync(metaPath);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                var gameVersion = root.TryGetProperty("dependencies", out var deps)
-                    ? deps.TryGetProperty("minecraft", out var mc) ? mc.GetString() : null
-                    : null;
-
-                // Download mods listed in the index
-                var modsDir = Path.Combine(target.InstanceDirectory, "mods");
-                Directory.CreateDirectory(modsDir);
-                if (root.TryGetProperty("files", out var filesEl))
-                {
-                    foreach (var fileEl in filesEl.EnumerateArray())
+                await VerifiedDownload.FetchAsync(http, file.Downloads, VerifiedDownload.ContainedPath(stage, file.Path), file.Sha512, file.Sha1, token);
+                var count = Interlocked.Increment(ref completed);
+                progress?.Report($"Downloaded {count}/{files.Count}: {file.Path}");
+            });
+            using (var zip = ZipFile.OpenRead(path))
+                foreach (var prefix in new[] { "overrides/", "client-overrides/" })
+                    foreach (var entry in zip.Entries.Where(e => e.FullName.StartsWith(prefix, StringComparison.Ordinal) && !e.FullName.EndsWith('/')))
                     {
-                        // path relative to instance root (e.g. "mods/sodium-1.21.jar")
-                        var relPath = fileEl.TryGetProperty("path", out var pathEl) ? pathEl.GetString() : null;
-                        if (string.IsNullOrEmpty(relPath)) continue;
-
-                        // Only download mods (skip config files etc that belong in overrides)
-                        if (!relPath.StartsWith("mods/", StringComparison.OrdinalIgnoreCase)) continue;
-
-                        // Pick first download URL
-                        string? downloadUrl = null;
-                        if (fileEl.TryGetProperty("downloads", out var dlEl))
-                            foreach (var u in dlEl.EnumerateArray())
-                            {
-                                downloadUrl = u.GetString();
-                                break;
-                            }
-
-                        if (string.IsNullOrEmpty(downloadUrl)) continue;
-
-                        var destPath = Path.Combine(target.InstanceDirectory, relPath.Replace('/', Path.DirectorySeparatorChar));
-                        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-
-                        if (!File.Exists(destPath))
-                        {
-                            var bytes = await _http.GetByteArrayAsync(downloadUrl);
-                            await File.WriteAllBytesAsync(destPath, bytes);
-                        }
+                        ct.ThrowIfCancellationRequested();
+                        var relative = entry.FullName[prefix.Length..]; PackManifest.ValidateContentPath(relative);
+                        if ((entry.ExternalAttributes >> 16 & 0xF000) == 0xA000) throw new InvalidDataException("Pack contains a symbolic link.");
+                        var destination = VerifiedDownload.ContainedPath(stage, relative);
+                        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(destination)!);
+                        await using var input = entry.Open(); await using var output = File.Create(destination);
+                        await input.CopyToAsync(output, ct);
                     }
-                }
-
-                // Copy overrides/ into instance directory
-                var overridesDir = Path.Combine(sourceFolder, "overrides");
-                ImportResult copyResult;
-                if (Directory.Exists(overridesDir))
-                    copyResult = await CopyOverridesAsync(overridesDir, target.InstanceDirectory, "Modrinth");
-                else
-                    copyResult = new ImportResult(true, "Modrinth pack imported.");
-
-                await WritePackMetaAsync(target, "modrinth", root);
-
-                var msg = copyResult.Success
-                    ? $"Modrinth pack imported. Game version: {gameVersion ?? "unknown"}."
-                    : copyResult.Message;
-
-                return new ImportResult(copyResult.Success, msg, gameVersion);
-            }
-            catch (Exception ex)
-            {
-                return new ImportResult(false, $"Modrinth import failed: {ex.Message}");
-            }
+            await File.WriteAllTextAsync(System.IO.Path.Combine(stage, "pack-meta.json"), JsonSerializer.Serialize(new { format = "modrinth", manifest.Name, manifest.GameVersion, manifest.LoaderVersion }), ct);
+            var metadata = System.IO.Path.Combine(target.InstanceDirectory, "instance.json");
+            if (File.Exists(metadata)) File.Copy(metadata, System.IO.Path.Combine(stage, "instance.json"));
+            ct.ThrowIfCancellationRequested();
+            if (Directory.Exists(target.InstanceDirectory)) Directory.Move(target.InstanceDirectory, backup);
+            try { Directory.Move(stage, target.InstanceDirectory); }
+            catch { if (Directory.Exists(backup)) Directory.Move(backup, target.InstanceDirectory); throw; }
+            published = true;
+            return new(true, $"Installed {manifest.Name}.", manifest.GameVersion);
         }
-
-        // ── Helpers ────────────────────────────────────────────────────────────
-
-        private static async Task<ImportResult> CopyOverridesAsync(
-            string sourceDir, string targetDir, string format)
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { return new(false, ex.Message); }
+        finally
         {
-            try
-            {
-                await Task.Run(() => CopyDirectory(sourceDir, targetDir));
-                return new ImportResult(true, $"{format} files copied successfully.");
-            }
-            catch (Exception ex)
-            {
-                return new ImportResult(false, $"Failed to copy files: {ex.Message}");
-            }
-        }
-
-        private static void CopyDirectory(string source, string dest)
-        {
-            Directory.CreateDirectory(dest);
-            foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
-            {
-                var relative = Path.GetRelativePath(source, file);
-                var destFile = Path.Combine(dest, relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
-                File.Copy(file, destFile, overwrite: true);
-            }
-        }
-
-        private static async Task WritePackMetaAsync(GameInstance target, string format, JsonElement root)
-        {
-            var metaPath = Path.Combine(target.InstanceDirectory, "pack-meta.json");
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var meta = new { format, imported = DateTime.UtcNow, raw = root };
-            await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, options));
+            if (Directory.Exists(stage)) Directory.Delete(stage, true);
+            if (published && Directory.Exists(backup)) Directory.Delete(backup, true);
         }
     }
 }

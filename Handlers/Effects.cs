@@ -22,12 +22,12 @@ namespace CitrineLauncher
             {
                 while (!token.IsCancellationRequested)
                 {
-                    if (Handlers.Settings.Instance.ParticlesEnabled)
+                    if (Handlers.Settings.Instance.ParticlesEnabled && IsVisible && WindowState != WindowState.Minimized && !SettingsHandler.IsOpen && !Handlers.SkinsHandler.IsOpen)
                     {
                         await Dispatcher.UIThread.InvokeAsync(() =>
                         {
                             // Bug fix #5: cap particle count to prevent unbounded accumulation
-                            if (ParticleCanvas.Children.Count >= 80) return;
+                            if (ParticleCanvas.Children.Count >= 80 || ParticleCanvas.Bounds.Width < 1 || ParticleCanvas.Bounds.Height < 1) return;
 
                             var particle = new Avalonia.Controls.Shapes.Ellipse
                             {
