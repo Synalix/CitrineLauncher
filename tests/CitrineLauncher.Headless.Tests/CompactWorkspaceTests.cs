@@ -109,7 +109,7 @@ public class InlineAccountTests
             page.FindControl<Button>("EditAccountButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             page.FindControl<TextBox>("UsernameInput")!.Text="Renamed_"+Guid.NewGuid().ToString("N")[..6];
             page.FindControl<Button>("SaveAccountButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(id,added.Id);Assert.Equal(added.Username,Settings.Instance.Username);Assert.Empty(window.OwnedWindows);
+            Assert.Equal(id,added.Id);Assert.Equal(added.Username,Settings.Instance.Username);Assert.Same(added,page.FindControl<ListBox>("AccountsList")!.SelectedItem);Assert.Empty(window.OwnedWindows);
         }
         finally{if(added!=null){OfflineSkinServer.Shared.Unregister(added);Settings.Instance.Accounts.Remove(added);}Settings.Instance.Username=previous;window.Close();}
     }
@@ -195,5 +195,64 @@ public class EmbeddedPackFlowTests
             else json="""{"hits":[{"project_id":"p1","slug":"p1","title":"Test pack","description":"Pack flow fixture","versions":["1.21.1"],"downloads":1}],"total_hits":1}""";
             return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new System.Net.Http.StringContent(json)});
         }
+    }
+}
+
+public class WorkspaceReviewRegressionTests
+{
+    [AvaloniaTheory]
+    [InlineData(1)][InlineData(2)]
+    public async Task DeletingAnInstanceSynchronizesHeaderAndMainSelection(int count)
+    {
+        UiTests.SeedVersions();var previous=Settings.Instance.MinecraftPath;
+        var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),Guid.NewGuid().ToString());
+        using var suppressed=Settings.Instance.SuppressSave();Settings.Instance.MinecraftPath=dir;Settings.Instance.ParticlesEnabled=false;InstanceManager.Instance.Load();
+        for(int i=0;i<count;i++)InstanceManager.Instance.CreateInstance("Instance "+i,"1.21.1",CitrineLauncher.Models.LoaderType.Fabric,"0.16.10");
+        var window=new MainWindow();
+        try
+        {
+            window.Show();window.UpdateLayout();
+            window.FindControl<Button>("btnSettings")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var workspace=window.GetVisualDescendants().OfType<ManagementWorkspace>().Single();workspace.Navigate("Instances");window.UpdateLayout();
+            var page=Assert.IsType<InstancesView>(workspace.CurrentPage);var deleted=(CitrineLauncher.Models.GameInstance)page.FindControl<ListBox>("InstancesList")!.SelectedItem!;
+            page.FindControl<Button>("DeleteButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var confirm=Assert.Single(window.OwnedWindows.OfType<ConfirmDialog>());
+            confirm.FindControl<Button>("ConfirmButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            await UiTests.WaitUntil(()=>!workspace.IsBusy);
+            var header=workspace.FindControl<ComboBox>("InstanceSelector")!;var main=window.FindControl<ComboBox>("cbInstances")!;
+            Assert.Equal(count-1,header.ItemCount);Assert.Equal(count-1,main.ItemCount);
+            Assert.DoesNotContain(header.Items.Cast<CitrineLauncher.Models.GameInstance>(),i=>i.Id==deleted.Id);
+            Assert.Equal(main.SelectedItem,header.SelectedItem);
+        }
+        finally{window.Close();Settings.Instance.MinecraftPath=previous;InstanceManager.Instance.Load();if(System.IO.Directory.Exists(dir))System.IO.Directory.Delete(dir,true);}
+    }
+    [AvaloniaFact]
+    public void EscapeFromInlineEditorButtonCancelsEditWithoutClosingWorkspace()
+    {
+        using var workspace=new ManagementWorkspace();var window=UiTests.Host(workspace);workspace.Navigate("Accounts");window.UpdateLayout();var settings=Assert.IsType<SettingsPanel>(workspace.CurrentPage);
+        bool closed=false;workspace.CloseRequested+=(_,_)=>closed=true;
+        settings.FindControl<Button>("AddOfflineButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        window.UpdateLayout();var save=settings.FindControl<Button>("SaveAccountButton")!;save.Focus();
+        save.RaiseEvent(new Avalonia.Input.KeyEventArgs{RoutedEvent=Avalonia.Input.InputElement.KeyDownEvent,Key=Avalonia.Input.Key.Escape});
+        Assert.False(settings.FindControl<StackPanel>("AccountEditor")!.IsVisible);Assert.False(closed);window.Close();
+    }
+    [AvaloniaFact]
+    public void SwitchingModBrowserToVanillaShowsInstalledPageExplanation()
+    {
+        UiTests.SeedVersions();var previous=Settings.Instance.MinecraftPath;
+        var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),Guid.NewGuid().ToString());
+        using var suppressed=Settings.Instance.SuppressSave();Settings.Instance.MinecraftPath=dir;InstanceManager.Instance.Load();
+        var fabric=InstanceManager.Instance.CreateInstance("Fabric","1.21.1",CitrineLauncher.Models.LoaderType.Fabric,"0.16.10");
+        var vanilla=InstanceManager.Instance.CreateInstance("Vanilla","1.21.1",CitrineLauncher.Models.LoaderType.Vanilla,"");
+        using var workspace=new ManagementWorkspace(fabric);var window=UiTests.Host(workspace);
+        try
+        {
+            workspace.Navigate("Mods");var mods=Assert.IsType<ModsView>(workspace.CurrentPage);
+            mods.FindControl<Button>("BrowseButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.IsType<ModrinthBrowserView>(workspace.CurrentPage);
+            workspace.FindControl<ComboBox>("InstanceSelector")!.SelectedItem=vanilla;
+            var explanation=Assert.IsType<ModsView>(workspace.CurrentPage);Assert.False(explanation.FindControl<Button>("BrowseButton")!.IsEnabled);
+        }
+        finally{window.Close();Settings.Instance.MinecraftPath=previous;InstanceManager.Instance.Load();if(System.IO.Directory.Exists(dir))System.IO.Directory.Delete(dir,true);}
     }
 }

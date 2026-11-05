@@ -116,6 +116,7 @@ public partial class ManagementWorkspace : UserControl, IDisposable
     }
     private void ShowBrowser(GameInstance? instance)
     {
+        if (instance?.Loader == LoaderType.Vanilla) { Navigate("Mods"); return; }
         _browser?.Dispose(); _browser = new ModrinthBrowserView(instance?.GameVersion, instance, _api, _http);
         PageTitle.Text = instance == null ? "Modrinth packs" : "Find mods";
         InstanceSelector.IsVisible = instance != null;
@@ -151,6 +152,7 @@ public partial class ManagementWorkspace : UserControl, IDisposable
     private void PageBusyChanged(object? sender, EventArgs e)
     {
         InstanceSelector.IsEnabled = !IsBusy;
+        if (!IsBusy) ClearNotice();
         BusyChanged?.Invoke(this, EventArgs.Empty);
     }
     private void CategoryList_SelectionChanged(object? sender, SelectionChangedEventArgs e) { if (!_updating && CategoryList.SelectedItem is string category) Navigate(category); }

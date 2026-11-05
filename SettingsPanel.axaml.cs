@@ -35,7 +35,9 @@ namespace CitrineLauncher
                 if (e.Key == Avalonia.Input.Key.Escape && !IsBusy)
                 {
                     e.Handled = true;
-                    CloseRequested?.Invoke(this, EventArgs.Empty);
+                    if (AccountEditor.IsVisible) CancelAccountEdit();
+                    else if (_isEditingFolder) SetFolderEditMode(false);
+                    else CloseRequested?.Invoke(this, EventArgs.Empty);
                 }
             };
         }
@@ -349,8 +351,10 @@ namespace CitrineLauncher
                 AccountErrorLabel.IsVisible = true;
                 return;
             }
+            Account savedAccount;
             if (_editingAccount is Account account)
             {
+                savedAccount = account;
                 var previousUsername = account.Username;
                 if (!string.Equals(previousUsername, username, StringComparison.OrdinalIgnoreCase))
                 {
@@ -361,9 +365,14 @@ namespace CitrineLauncher
                     OfflineSkinServer.Shared.Register(account);
                 }
             }
-            else settings.Accounts.Add(new Account { Username = username, Type = "Offline" });
+            else
+            {
+                savedAccount = new Account { Username = username, Type = "Offline" };
+                settings.Accounts.Add(savedAccount);
+            }
             settings.Save();
             RefreshAccountList();
+            AccountsList.SelectedItem = savedAccount;
             CancelAccountEdit();
             SettingsSaved?.Invoke(this, settings);
         }

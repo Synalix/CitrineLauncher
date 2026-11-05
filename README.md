@@ -66,3 +66,5 @@ Windows UI, NativeWebView, screen-reader and high-DPI testing are still required
 
 ## Compact management workspace
 Settings, accounts, skins, instance creation, installed mods and Modrinth browsing now share one compact category sidebar inside the launcher. The main launcher view is retained. Actions use short, content-sized buttons and settings use labeled rows; offline accounts are edited inline. Active file operations block navigation until cancellation/cleanup completes.
+
+![Compact management workspace](docs/previews/compact-workspace.png)

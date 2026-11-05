@@ -41,12 +41,17 @@ public partial class InstancesView : WorkspacePage
     {
         if (IsBusy || InstancesList.SelectedItem is not GameInstance instance || OwnerWindow is not Window owner) return;
         IsBusy = true;
+        var deleted = false;
         try
         {
             if (!await new ConfirmDialog($"Delete {instance.Name}?", "Deletes this instance and its files permanently.").ShowDialog<bool>(owner)) return;
-            InstanceManager.Instance.DeleteInstance(instance); Refresh(); InstancesChanged?.Invoke();
+            InstanceManager.Instance.DeleteInstance(instance); deleted = true;
         }
         catch (Exception ex) { StatusText.Text = "Could not delete instance. " + ex.Message; }
-        finally { IsBusy = false; }
+        finally
+        {
+            IsBusy = false;
+            if (deleted) { Refresh(); InstancesChanged?.Invoke(); }
+        }
     }
 }
